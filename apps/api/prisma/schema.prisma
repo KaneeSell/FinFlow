@@ -20,6 +20,7 @@ model User {
   transactions   Transaction[]
   recurringRules RecurringRule[]
   refreshTokens  RefreshToken[]
+  goals          Goal[]
 }
 
 model RefreshToken {
@@ -44,6 +45,10 @@ model Account {
   color               String          @default("#10b981")
   icon                String          @default("landmark")
   isArchived          Boolean         @default(false)
+  creditLimitCents    Int?
+  closingDay          Int?
+  dueDay              Int?
+  currency            String          @default("BRL")
   createdAt           DateTime        @default(now())
   updatedAt           DateTime        @updatedAt
   transactions        Transaction[]   @relation("SourceAccount")
@@ -114,9 +119,33 @@ model Transaction {
   status               String         @default("PAID")
   notes                String?
   tags                 String         @default("[]")
+  installmentGroupId   String?
+  installmentNumber    Int?
+  installmentTotal     Int?
+  invoiceMonth         String?
+  attachmentName       String?
+  attachmentDataUrl    String?
   createdAt            DateTime       @default(now())
   updatedAt            DateTime       @updatedAt
 
   @@index([userId, date])
   @@index([accountId])
+  @@index([invoiceMonth])
+}
+
+model Goal {
+  id                 String    @id @default(cuid())
+  userId             String
+  user               User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name               String
+  targetAmountCents  Int
+  currentAmountCents Int       @default(0)
+  deadline           DateTime?
+  color              String    @default("#10b981")
+  icon               String    @default("target")
+  notes              String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  @@index([userId])
 }

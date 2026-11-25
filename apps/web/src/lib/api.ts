@@ -1,18 +1,26 @@
 import type {
   AccountDTO,
+  BudgetOverviewDTO,
   CategoryDTO,
+  ContributeGoalInput,
   CreateAccountInput,
   CreateCategoryInput,
+  CreateGoalInput,
   CreateRecurringRuleInput,
   CreateTransactionInput,
+  CreditCardInvoiceDTO,
   DashboardSummaryDTO,
+  GoalDTO,
+  ImportTransactionsInput,
   LoginInput,
+  PayInvoiceInput,
   RecurringRuleDTO,
   RegisterInput,
   ServerConnectionConfig,
   TransactionDTO,
   UpdateAccountInput,
   UpdateCategoryInput,
+  UpdateGoalInput,
   UpdateRecurringRuleInput,
   UpdateTransactionInput,
   UserDTO,
@@ -273,6 +281,72 @@ export const api = {
       }),
     remove: (id: string) =>
       request<void>(`/api/v1/transactions/${id}`, { method: "DELETE" }),
+    importRows: (input: ImportTransactionsInput) =>
+      request<{ imported: number; skipped: number }>("/api/v1/transactions/import", {
+        method: "POST",
+        body: JSON.stringify(input),
+      }),
+    exportCsvUrl: () => `${getActiveApiBaseUrl()}/api/v1/transactions/export?format=csv`,
+    exportCsvText: async () => {
+      const session = getStoredSession();
+      const res = await fetch(`${getActiveApiBaseUrl()}/api/v1/transactions/export?format=csv`, {
+        headers: session?.accessToken ? { Authorization: `Bearer ${session.accessToken}` } : {},
+      });
+      if (!res.ok) throw new ApiError(res.status, "Erro ao exportar CSV");
+      return res.text();
+    },
+  },
+  creditCards: {
+    invoices: (month: string) =>
+      request<CreditCardInvoiceDTO[]>(
+        `/api/v1/credit-cards/invoices?month=${encodeURIComponent(month)}`
+      ),
+    payInvoice: (accountId: string, input: PayInvoiceInput) =>
+      request<{ ok: boolean; paidCents: number }>(
+        `/api/v1/credit-cards/${accountId}/pay-invoice`,
+        {
+          method: "POST",
+          body: JSON.stringify(input),
+        }
+      ),
+  },
+  budgets: {
+    list: (month: string) =>
+      request<BudgetOverviewDTO[]>(`/api/v1/budgets?month=${encodeURIComponent(month)}`),
+  },
+  goals: {
+    list: () => request<GoalDTO[]>("/api/v1/goals"),
+    create: (input: CreateGoalInput) =>
+      request<GoalDTO>("/api/v1/goals", { method: "POST", body: JSON.stringify(input) }),
+    update: (id: string, input: UpdateGoalInput) =>
+      request<GoalDTO>(`/api/v1/goals/${id}`, { method: "PATCH", body: JSON.stringify(input) }),
+    contribute: (id: string, input: ContributeGoalInput) =>
+      request<GoalDTO>(`/api/v1/goals/${id}/contribute`, {
+        method: "POST",
+        body: JSON.stringify(input),
+      }),
+    remove: (id: string) => request<void>(`/api/v1/goals/${id}`, { method: "DELETE" }),
+  },
+  integrations: {
+    rates: () =>
+      request<{
+        source: "live" | "fallback";
+        updatedAt: string;
+        rates: { usdBrl: number; eurBrl: number; btcBrl: number };
+      }>("/api/v1/integrations/rates"),
+    bcb: () =>
+      request<{
+        source: "live" | "fallback";
+        updatedAt: string;
+        selicPercent: number;
+        ipcaPercent12m: number;
+      }>("/api/v1/integrations/bcb"),
+    holidays: (year: number) =>
+      request<{
+        source: "live" | "fallback";
+        year: string;
+        holidays: Array<{ date: string; name: string; type: string }>;
+      }>(`/api/v1/integrations/holidays/${year}`),
   },
   recurring: {
     list: () => request<RecurringRuleDTO[]>("/api/v1/recurring"),

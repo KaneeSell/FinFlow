@@ -27,6 +27,9 @@ export function AccountsPage({ accounts, privacyMode, onRefresh }: AccountsPageP
   const [name, setName] = useState("");
   const [type, setType] = useState<AccountType>("CHECKING");
   const [initialInput, setInitialInput] = useState("");
+  const [creditLimitInput, setCreditLimitInput] = useState("");
+  const [closingDay, setClosingDay] = useState("10");
+  const [dueDay, setDueDay] = useState("17");
   const [creating, setCreating] = useState(false);
 
   const handleCreate = async (e: React.FormEvent) => {
@@ -38,11 +41,19 @@ export function AccountsPage({ accounts, privacyMode, onRefresh }: AccountsPageP
         name: name.trim(),
         type,
         initialBalanceCents: parseCurrencyToCents(initialInput || "0"),
-        color: "#10b981",
-        icon: "landmark",
+        color: type === "CREDIT_CARD" ? "#8b5cf6" : "#10b981",
+        icon: type === "CREDIT_CARD" ? "credit-card" : "landmark",
+        ...(type === "CREDIT_CARD"
+          ? {
+              creditLimitCents: parseCurrencyToCents(creditLimitInput || "5000"),
+              closingDay: Number(closingDay) || 10,
+              dueDay: Number(dueDay) || 17,
+            }
+          : {}),
       });
       setName("");
       setInitialInput("");
+      setCreditLimitInput("");
       onRefresh();
     } finally {
       setCreating(false);
@@ -85,11 +96,37 @@ export function AccountsPage({ accounts, privacyMode, onRefresh }: AccountsPageP
         </select>
         <input
           inputMode="decimal"
-          value={initialInput}
-          onChange={(e) => setInitialInput(e.target.value)}
-          placeholder="Saldo inicial (R$)"
+          value={type === "CREDIT_CARD" ? creditLimitInput : initialInput}
+          onChange={(e) =>
+            type === "CREDIT_CARD"
+              ? setCreditLimitInput(e.target.value)
+              : setInitialInput(e.target.value)
+          }
+          placeholder={type === "CREDIT_CARD" ? "Limite do cartão (R$)" : "Saldo inicial (R$)"}
           className="rounded-xl border border-zinc-300 bg-transparent px-3 py-2 text-sm tabular-nums outline-none focus:border-emerald-500 dark:border-zinc-700"
         />
+        {type === "CREDIT_CARD" && (
+          <>
+            <input
+              type="number"
+              min={1}
+              max={31}
+              value={closingDay}
+              onChange={(e) => setClosingDay(e.target.value)}
+              placeholder="Dia fechamento"
+              className="rounded-xl border border-zinc-300 bg-transparent px-3 py-2 text-sm outline-none dark:border-zinc-700"
+            />
+            <input
+              type="number"
+              min={1}
+              max={31}
+              value={dueDay}
+              onChange={(e) => setDueDay(e.target.value)}
+              placeholder="Dia vencimento"
+              className="rounded-xl border border-zinc-300 bg-transparent px-3 py-2 text-sm outline-none dark:border-zinc-700"
+            />
+          </>
+        )}
         <button
           type="submit"
           disabled={creating}

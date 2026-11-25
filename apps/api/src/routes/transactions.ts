@@ -1,5 +1,13 @@
+import crypto from "node:crypto";
 import type { FastifyInstance } from "fastify";
-import { createTransactionSchema, updateTransactionSchema } from "@finflow/shared";
+import {
+  computeInvoiceMonth,
+  createTransactionSchema,
+  exportTransactionsToCsv,
+  importTransactionsSchema,
+  splitInstallmentsCents,
+  updateTransactionSchema,
+} from "@finflow/shared";
 import { getMonthBounds, parseDateInput } from "../lib/date.js";
 
 function serializeTransaction(tx: {
@@ -15,6 +23,12 @@ function serializeTransaction(tx: {
   status: string;
   notes: string | null;
   tags: string;
+  installmentGroupId?: string | null;
+  installmentNumber?: number | null;
+  installmentTotal?: number | null;
+  invoiceMonth?: string | null;
+  attachmentName?: string | null;
+  attachmentDataUrl?: string | null;
   createdAt: Date;
   account?: { id: string; name: string; color: string } | null;
   destinationAccount?: { id: string; name: string; color: string } | null;
@@ -40,6 +54,12 @@ function serializeTransaction(tx: {
     status: tx.status,
     notes: tx.notes,
     tags: parsedTags,
+    installmentGroupId: tx.installmentGroupId ?? null,
+    installmentNumber: tx.installmentNumber ?? null,
+    installmentTotal: tx.installmentTotal ?? null,
+    invoiceMonth: tx.invoiceMonth ?? null,
+    attachmentName: tx.attachmentName ?? null,
+    attachmentDataUrl: tx.attachmentDataUrl ?? null,
     createdAt: tx.createdAt.toISOString(),
     account: tx.account ?? null,
     destinationAccount: tx.destinationAccount ?? null,
@@ -93,6 +113,102 @@ export async function registerTransactionRoutes(app: FastifyInstance): Promise<v
     }
   );
 
+  app.get(
+    "/api/v1/transactions/export",
+    { preHandler: [app.authenticate] },
+    async (request, reply) => {
+      const { format = "csv" } = request.query as { format?: string };
+      const txs = await app.prisma.transaction.findMany({
+        where: { userId: request.user.sub },
+        include: {
+          account: { select: { id: true, name: true, color: true } },
+          destinationAccount: { select: { id: true, name: true, color: true } },
+          category: { select: { id: true, name: true, color: true, icon: true } },
+        },
+        orderBy: [{ date: "desc" }],
+      });
+      const serialized = txs.map(serializeTransaction);
+
+      if (format === "json") {
+        return reply
+          .header("Content-Type", "application/json")
+          .send({ exportedAt: new Date().toISOString(), transactions: serialized });
+      }
+
+      const csv = exportTransactionsToCsv(serialized as never);
+      return reply
+        .header("Content-Type", "text/csv; charset=utf-8")
+        .header("Content-Disposition", 'attachment; filename="finflow-lancamentos.csv"')
+        .send(csv);
+    }
+  );
+
+  app.post(
+    "/api/v1/transactions/import",
+    { preHandler: [app.authenticate] },
+    async (request, reply) => {
+      const parsed = importTransactionsSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.status(400).send({
+          error: "ValidationError",
+          message: parsed.error.issues[0]?.message ?? "Dados inválidos",
+        });
+      }
+
+      const account = await app.prisma.account.findFirst({
+        where: { id: parsed.data.accountId, userId: request.user.sub },
+      });
+      if (!account) {
+        return reply.status(404).send({ error: "NotFound", message: "Conta não encontrada" });
+      }
+
+      const existingTxs = await app.prisma.transaction.findMany({
+        where: { userId: request.user.sub, accountId: account.id },
+        select: { date: true, title: true, amountCents: true },
+      });
+      const existingKeys = new Set(
+        existingTxs.map(
+          (t) => `${t.date.toISOString().slice(0, 10)}|${t.title.toLowerCase()}|${t.amountCents}`
+        )
+      );
+
+      let imported = 0;
+      let skipped = 0;
+
+      for (const row of parsed.data.rows) {
+        const key = `${row.date}|${row.title.toLowerCase()}|${row.amountCents}`;
+        if (existingKeys.has(key)) {
+          skipped += 1;
+          continue;
+        }
+        existingKeys.add(key);
+
+        const dt = parseDateInput(row.date);
+        const invoiceMonth =
+          account.type === "CREDIT_CARD"
+            ? computeInvoiceMonth(dt, account.closingDay ?? 10)
+            : null;
+
+        await app.prisma.transaction.create({
+          data: {
+            userId: request.user.sub,
+            accountId: account.id,
+            title: row.title,
+            type: row.type,
+            amountCents: row.amountCents,
+            date: dt,
+            status: "PAID",
+            invoiceMonth,
+            tags: JSON.stringify(["importado"]),
+          },
+        });
+        imported += 1;
+      }
+
+      return reply.status(201).send({ imported, skipped });
+    }
+  );
+
   app.post(
     "/api/v1/transactions",
     { preHandler: [app.authenticate] },
@@ -123,6 +239,65 @@ export async function registerTransactionRoutes(app: FastifyInstance): Promise<v
         }
       }
 
+      const installments = parsed.data.installments ?? 1;
+      const baseDate = parseDateInput(parsed.data.date);
+
+      if (installments > 1 && parsed.data.type !== "TRANSFER") {
+        const parts = splitInstallmentsCents(parsed.data.amountCents, installments);
+        const groupId = crypto.randomUUID();
+        const createdList = await app.prisma.$transaction(
+          parts.map((partCents, idx) => {
+            const dt = new Date(
+              Date.UTC(
+                baseDate.getUTCFullYear(),
+                baseDate.getUTCMonth() + idx,
+                baseDate.getUTCDate(),
+                12,
+                0,
+                0
+              )
+            );
+            const invoiceMonth =
+              account.type === "CREDIT_CARD"
+                ? computeInvoiceMonth(dt, account.closingDay ?? 10)
+                : null;
+
+            return app.prisma.transaction.create({
+              data: {
+                userId: request.user.sub,
+                accountId: parsed.data.accountId,
+                categoryId: parsed.data.categoryId ?? null,
+                title: `${parsed.data.title} (${idx + 1}/${installments})`,
+                type: parsed.data.type,
+                amountCents: partCents,
+                date: dt,
+                status: idx === 0 ? parsed.data.status : "PENDING",
+                notes: parsed.data.notes ?? null,
+                tags: JSON.stringify(parsed.data.tags ?? []),
+                installmentGroupId: groupId,
+                installmentNumber: idx + 1,
+                installmentTotal: installments,
+                invoiceMonth,
+                attachmentName: idx === 0 ? (parsed.data.attachmentName ?? null) : null,
+                attachmentDataUrl: idx === 0 ? (parsed.data.attachmentDataUrl ?? null) : null,
+              },
+              include: {
+                account: { select: { id: true, name: true, color: true } },
+                destinationAccount: { select: { id: true, name: true, color: true } },
+                category: { select: { id: true, name: true, color: true, icon: true } },
+              },
+            });
+          })
+        );
+
+        return reply.status(201).send(serializeTransaction(createdList[0]!));
+      }
+
+      const invoiceMonth =
+        account.type === "CREDIT_CARD" && parsed.data.type !== "TRANSFER"
+          ? computeInvoiceMonth(baseDate, account.closingDay ?? 10)
+          : null;
+
       const created = await app.prisma.transaction.create({
         data: {
           userId: request.user.sub,
@@ -132,10 +307,13 @@ export async function registerTransactionRoutes(app: FastifyInstance): Promise<v
           title: parsed.data.title,
           type: parsed.data.type,
           amountCents: parsed.data.amountCents,
-          date: parseDateInput(parsed.data.date),
+          date: baseDate,
           status: parsed.data.status,
           notes: parsed.data.notes ?? null,
           tags: JSON.stringify(parsed.data.tags ?? []),
+          invoiceMonth,
+          attachmentName: parsed.data.attachmentName ?? null,
+          attachmentDataUrl: parsed.data.attachmentDataUrl ?? null,
         },
         include: {
           account: { select: { id: true, name: true, color: true } },

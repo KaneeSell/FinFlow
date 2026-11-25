@@ -36,6 +36,9 @@ export function TransactionModal({
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [status, setStatus] = useState<TransactionStatus>("PAID");
   const [notes, setNotes] = useState("");
+  const [installments, setInstallments] = useState(1);
+  const [attachmentName, setAttachmentName] = useState<string | null>(null);
+  const [attachmentDataUrl, setAttachmentDataUrl] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -52,6 +55,9 @@ export function TransactionModal({
       setDate(editing.date.slice(0, 10));
       setStatus(editing.status);
       setNotes(editing.notes ?? "");
+      setInstallments(1);
+      setAttachmentName(editing.attachmentName ?? null);
+      setAttachmentDataUrl(editing.attachmentDataUrl ?? null);
     } else {
       setType("EXPENSE");
       setTitle("");
@@ -62,6 +68,9 @@ export function TransactionModal({
       setDate(new Date().toISOString().slice(0, 10));
       setStatus("PAID");
       setNotes("");
+      setInstallments(1);
+      setAttachmentName(null);
+      setAttachmentDataUrl(null);
     }
   }, [open, editing, accounts]);
 
@@ -92,6 +101,9 @@ export function TransactionModal({
         date,
         status,
         notes: notes.trim() || null,
+        ...(editing ? {} : { installments }),
+        attachmentName,
+        attachmentDataUrl,
       };
 
       if (editing) {
@@ -270,14 +282,57 @@ export function TransactionModal({
             </div>
           </div>
 
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-xs font-medium text-zinc-400">Observações</label>
+              <input
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Opcional..."
+                className="w-full rounded-xl border border-zinc-300 bg-transparent px-3 py-2 text-sm outline-none focus:border-emerald-500 dark:border-zinc-700"
+              />
+            </div>
+
+            {!editing && type !== "TRANSFER" && (
+              <div>
+                <label className="mb-1 block text-xs font-medium text-zinc-400">Parcelas</label>
+                <select
+                  value={installments}
+                  onChange={(e) => setInstallments(Number(e.target.value))}
+                  className="w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm outline-none dark:border-zinc-700 dark:bg-zinc-900"
+                >
+                  {[1, 2, 3, 4, 5, 6, 10, 12, 18, 24].map((n) => (
+                    <option key={n} value={n}>
+                      {n === 1 ? "À vista (1x)" : `${n}x mensais`}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
+
           <div>
-            <label className="mb-1 block text-xs font-medium text-zinc-400">Observações</label>
+            <label className="mb-1 block text-xs font-medium text-zinc-400">
+              Comprovante (opcional)
+            </label>
             <input
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Opcional..."
-              className="w-full rounded-xl border border-zinc-300 bg-transparent px-3 py-2 text-sm outline-none focus:border-emerald-500 dark:border-zinc-700"
+              type="file"
+              accept="image/*,application/pdf"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                setAttachmentName(file.name);
+                const reader = new FileReader();
+                reader.onload = () => {
+                  if (typeof reader.result === "string") setAttachmentDataUrl(reader.result);
+                };
+                reader.readAsDataURL(file);
+              }}
+              className="block w-full text-xs text-zinc-400 file:mr-3 file:rounded-lg file:border-0 file:bg-zinc-800 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-zinc-200"
             />
+            {attachmentName && (
+              <p className="mt-1 text-[11px] text-emerald-400">Anexo: {attachmentName}</p>
+            )}
           </div>
 
           {error && (

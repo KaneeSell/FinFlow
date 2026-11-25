@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ArrowLeftRight,
   Command,
+  CreditCard,
   Eye,
   EyeOff,
   LayoutDashboard,
@@ -9,12 +10,16 @@ import {
   Repeat,
   Settings,
   Tag,
+  Target,
   Wallet,
 } from "lucide-react";
 import type {
   AccountDTO,
+  BudgetOverviewDTO,
   CategoryDTO,
+  CreditCardInvoiceDTO,
   DashboardSummaryDTO,
+  GoalDTO,
   RecurringRuleDTO,
   TransactionDTO,
 } from "@finflow/shared";
@@ -25,7 +30,9 @@ import { TransactionModal } from "./components/TransactionModal";
 import { api, getStoredSession, saveStoredSession, type AuthSession } from "./lib/api";
 import { AccountsPage } from "./pages/AccountsPage";
 import { AuthPage } from "./pages/AuthPage";
+import { BudgetsGoalsPage } from "./pages/BudgetsGoalsPage";
 import { CategoriesPage } from "./pages/CategoriesPage";
+import { CreditCardsPage } from "./pages/CreditCardsPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { RecurringPage } from "./pages/RecurringPage";
 import { SettingsPage } from "./pages/SettingsPage";
@@ -35,6 +42,8 @@ const NAV_ITEMS: Array<{ id: AppPage; label: string; shortcut: string; icon: Rea
   { id: "dashboard", label: "Dashboard", shortcut: "G D", icon: <LayoutDashboard className="h-4 w-4" /> },
   { id: "transactions", label: "Lançamentos", shortcut: "G T", icon: <ArrowLeftRight className="h-4 w-4" /> },
   { id: "recurring", label: "Recorrentes", shortcut: "G R", icon: <Repeat className="h-4 w-4" /> },
+  { id: "cards", label: "Cartões", shortcut: "G F", icon: <CreditCard className="h-4 w-4" /> },
+  { id: "budgets", label: "Metas & Orçam.", shortcut: "G B", icon: <Target className="h-4 w-4" /> },
   { id: "accounts", label: "Contas", shortcut: "G A", icon: <Wallet className="h-4 w-4" /> },
   { id: "categories", label: "Categorias", shortcut: "G C", icon: <Tag className="h-4 w-4" /> },
   { id: "settings", label: "Configurações", shortcut: "G S", icon: <Settings className="h-4 w-4" /> },
@@ -55,6 +64,12 @@ export function App() {
   const [categories, setCategories] = useState<CategoryDTO[]>([]);
   const [transactions, setTransactions] = useState<TransactionDTO[]>([]);
   const [recurringRules, setRecurringRules] = useState<RecurringRuleDTO[]>([]);
+  const [cardInvoices, setCardInvoices] = useState<CreditCardInvoiceDTO[]>([]);
+  const [budgets, setBudgets] = useState<BudgetOverviewDTO[]>([]);
+  const [goals, setGoals] = useState<GoalDTO[]>([]);
+  const [rates, setRates] = useState<{ usdBrl: number; eurBrl: number; btcBrl: number } | null>(null);
+  const [bcb, setBcb] = useState<{ selicPercent: number; ipcaPercent12m: number } | null>(null);
+  const [holidays, setHolidays] = useState<Array<{ date: string; name: string }>>([]);
   const [loading, setLoading] = useState(false);
 
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -74,7 +89,7 @@ export function App() {
     if (!session) return;
     setLoading(true);
     try {
-      const [sum, accs, cats, txs, recs] = await Promise.all([
+      const [sum, accs, cats, txs, recs, invs, bgs, gls] = await Promise.all([
         api.dashboard.summary(month),
         api.accounts.list(),
         api.categories.list(),
@@ -84,12 +99,18 @@ export function App() {
           type: txTypeFilter || undefined,
         }),
         api.recurring.list(),
+        api.creditCards.invoices(month),
+        api.budgets.list(month),
+        api.goals.list(),
       ]);
       setSummary(sum);
       setAccounts(accs);
       setCategories(cats);
       setTransactions(txs);
       setRecurringRules(recs);
+      setCardInvoices(invs);
+      setBudgets(bgs);
+      setGoals(gls);
     } catch {
       // handled by auth/401 or UI
     } finally {
@@ -100,6 +121,15 @@ export function App() {
   useEffect(() => {
     void loadAllData();
   }, [loadAllData]);
+
+  useEffect(() => {
+    if (!session) return;
+    void Promise.all([
+      api.integrations.rates().then((rt) => setRates(rt.rates)).catch(() => null),
+      api.integrations.bcb().then((bc) => setBcb({ selicPercent: bc.selicPercent, ipcaPercent12m: bc.ipcaPercent12m })).catch(() => null),
+      api.integrations.holidays(new Date().getFullYear()).then((hol) => setHolidays(hol.holidays)).catch(() => null),
+    ]);
+  }, [session]);
 
   // Keyboard First global shortcuts
   useEffect(() => {
@@ -138,6 +168,8 @@ export function App() {
           d: "dashboard",
           t: "transactions",
           r: "recurring",
+          f: "cards",
+          b: "budgets",
           a: "accounts",
           c: "categories",
           s: "settings",
@@ -339,6 +371,32 @@ export function App() {
               await api.transactions.remove(id);
               void loadAllData();
             }}
+            onRefresh={() => void loadAllData()}
+          />
+        )}
+
+        {page === "cards" && (
+          <CreditCardsPage
+            invoices={cardInvoices}
+            accounts={accounts}
+            month={month}
+            onMonthChange={setMonth}
+            privacyMode={privacyMode}
+            onRefresh={() => void loadAllData()}
+          />
+        )}
+
+        {page === "budgets" && (
+          <BudgetsGoalsPage
+            budgets={budgets}
+            goals={goals}
+            rates={rates}
+            bcb={bcb}
+            holidays={holidays}
+            month={month}
+            onMonthChange={setMonth}
+            privacyMode={privacyMode}
+            onRefresh={() => void loadAllData()}
           />
         )}
 

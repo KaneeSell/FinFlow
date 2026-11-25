@@ -49,6 +49,10 @@ export const createAccountSchema = z.object({
   initialBalanceCents: z.number().int().default(0),
   color: z.string().trim().min(4).max(20).default("#10b981"),
   icon: z.string().trim().min(1).max(30).default("landmark"),
+  creditLimitCents: z.number().int().nonnegative().nullable().optional(),
+  closingDay: z.number().int().min(1).max(31).nullable().optional(),
+  dueDay: z.number().int().min(1).max(31).nullable().optional(),
+  currency: z.string().trim().length(3).default("BRL").optional(),
 });
 
 export const updateAccountSchema = createAccountSchema.partial().extend({
@@ -77,6 +81,9 @@ export const createTransactionSchema = z
     status: z.enum(TRANSACTION_STATUSES).default("PAID"),
     notes: z.string().max(500).nullable().optional(),
     tags: z.array(z.string().trim().min(1).max(30)).max(10).optional(),
+    installments: z.number().int().min(1).max(60).optional(),
+    attachmentName: z.string().max(180).nullable().optional(),
+    attachmentDataUrl: z.string().max(2_500_000).nullable().optional(),
   })
   .refine(
     (data) => {
@@ -155,6 +162,10 @@ export interface AccountDTO {
   color: string;
   icon: string;
   isArchived: boolean;
+  creditLimitCents: number | null;
+  closingDay: number | null;
+  dueDay: number | null;
+  currency: string;
   createdAt: string;
 }
 
@@ -180,6 +191,12 @@ export interface TransactionDTO {
   status: TransactionStatus;
   notes: string | null;
   tags: string[];
+  installmentGroupId?: string | null;
+  installmentNumber?: number | null;
+  installmentTotal?: number | null;
+  invoiceMonth?: string | null;
+  attachmentName?: string | null;
+  attachmentDataUrl?: string | null;
   createdAt: string;
   account?: { id: string; name: string; color: string } | null;
   destinationAccount?: { id: string; name: string; color: string } | null;

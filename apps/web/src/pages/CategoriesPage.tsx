@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
-import type { CategoryDTO, CategoryType } from "@finflow/shared";
+import { parseCurrencyToCents, type CategoryDTO, type CategoryType } from "@finflow/shared";
 import { api } from "../lib/api";
 
 interface CategoriesPageProps {
@@ -12,6 +12,7 @@ export function CategoriesPage({ categories, onRefresh }: CategoriesPageProps) {
   const [name, setName] = useState("");
   const [type, setType] = useState<CategoryType>("EXPENSE");
   const [color, setColor] = useState("#6366f1");
+  const [budgetLimitInput, setBudgetLimitInput] = useState("");
   const [creating, setCreating] = useState(false);
 
   const handleCreate = async (e: React.FormEvent) => {
@@ -19,13 +20,16 @@ export function CategoriesPage({ categories, onRefresh }: CategoriesPageProps) {
     if (!name.trim()) return;
     setCreating(true);
     try {
+      const budgetCents = budgetLimitInput ? parseCurrencyToCents(budgetLimitInput) : null;
       await api.categories.create({
         name: name.trim(),
         type,
         color,
         icon: "tag",
+        budgetLimitCents: budgetCents && budgetCents > 0 ? budgetCents : null,
       });
       setName("");
+      setBudgetLimitInput("");
       onRefresh();
     } finally {
       setCreating(false);
@@ -46,7 +50,7 @@ export function CategoriesPage({ categories, onRefresh }: CategoriesPageProps) {
 
       <form
         onSubmit={handleCreate}
-        className="grid grid-cols-1 gap-3 rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900 sm:grid-cols-4"
+        className="grid grid-cols-1 gap-3 rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900 sm:grid-cols-5"
       >
         <input
           required
@@ -63,6 +67,13 @@ export function CategoriesPage({ categories, onRefresh }: CategoriesPageProps) {
           <option value="EXPENSE">Despesa</option>
           <option value="INCOME">Receita</option>
         </select>
+        <input
+          inputMode="decimal"
+          value={budgetLimitInput}
+          onChange={(e) => setBudgetLimitInput(e.target.value)}
+          placeholder="Limite mensal (R$)"
+          className="rounded-xl border border-zinc-300 bg-transparent px-3 py-2 text-sm tabular-nums outline-none focus:border-emerald-500 dark:border-zinc-700"
+        />
         <div className="flex items-center gap-2 rounded-xl border border-zinc-300 px-3 py-1.5 dark:border-zinc-700">
           <input
             type="color"

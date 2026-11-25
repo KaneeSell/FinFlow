@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
   ArrowLeftRight,
+  CreditCard,
   EyeOff,
   HelpCircle,
   LayoutDashboard,
@@ -10,6 +11,7 @@ import {
   Search,
   Settings,
   Tag,
+  Target,
   Wallet,
 } from "lucide-react";
 
@@ -17,6 +19,8 @@ export type AppPage =
   | "dashboard"
   | "transactions"
   | "recurring"
+  | "cards"
+  | "budgets"
   | "accounts"
   | "categories"
   | "settings";
@@ -80,6 +84,20 @@ export function CommandPalette({
       hint: "G R",
       icon: <Repeat className="h-4 w-4" />,
       action: () => onNavigate("recurring"),
+    },
+    {
+      id: "nav-cards",
+      label: "Ir para Cartões & Faturas",
+      hint: "G F",
+      icon: <CreditCard className="h-4 w-4" />,
+      action: () => onNavigate("cards"),
+    },
+    {
+      id: "nav-budgets",
+      label: "Ir para Orçamentos & Metas",
+      hint: "G B",
+      icon: <Target className="h-4 w-4" />,
+      action: () => onNavigate("budgets"),
     },
     {
       id: "nav-accounts",

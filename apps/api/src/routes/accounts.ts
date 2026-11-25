@@ -37,6 +37,40 @@ export async function computeAccountBalances(
   return deltaMap;
 }
 
+function serializeAccount(
+  acc: {
+    id: string;
+    name: string;
+    type: string;
+    initialBalanceCents: number;
+    color: string;
+    icon: string;
+    isArchived: boolean;
+    creditLimitCents: number | null;
+    closingDay: number | null;
+    dueDay: number | null;
+    currency: string;
+    createdAt: Date;
+  },
+  delta: number
+) {
+  return {
+    id: acc.id,
+    name: acc.name,
+    type: acc.type,
+    initialBalanceCents: acc.initialBalanceCents,
+    currentBalanceCents: acc.initialBalanceCents + delta,
+    color: acc.color,
+    icon: acc.icon,
+    isArchived: acc.isArchived,
+    creditLimitCents: acc.creditLimitCents,
+    closingDay: acc.closingDay,
+    dueDay: acc.dueDay,
+    currency: acc.currency,
+    createdAt: acc.createdAt.toISOString(),
+  };
+}
+
 export async function registerAccountRoutes(app: FastifyInstance): Promise<void> {
   app.get(
     "/api/v1/accounts",
@@ -48,17 +82,7 @@ export async function registerAccountRoutes(app: FastifyInstance): Promise<void>
       });
       const deltas = await computeAccountBalances(app.prisma, request.user.sub);
 
-      return accounts.map((acc) => ({
-        id: acc.id,
-        name: acc.name,
-        type: acc.type,
-        initialBalanceCents: acc.initialBalanceCents,
-        currentBalanceCents: acc.initialBalanceCents + (deltas.get(acc.id) ?? 0),
-        color: acc.color,
-        icon: acc.icon,
-        isArchived: acc.isArchived,
-        createdAt: acc.createdAt.toISOString(),
-      }));
+      return accounts.map((acc) => serializeAccount(acc, deltas.get(acc.id) ?? 0));
     }
   );
 
@@ -78,20 +102,11 @@ export async function registerAccountRoutes(app: FastifyInstance): Promise<void>
         data: {
           userId: request.user.sub,
           ...parsed.data,
+          currency: parsed.data.currency ?? "BRL",
         },
       });
 
-      return reply.status(201).send({
-        id: acc.id,
-        name: acc.name,
-        type: acc.type,
-        initialBalanceCents: acc.initialBalanceCents,
-        currentBalanceCents: acc.initialBalanceCents,
-        color: acc.color,
-        icon: acc.icon,
-        isArchived: acc.isArchived,
-        createdAt: acc.createdAt.toISOString(),
-      });
+      return reply.status(201).send(serializeAccount(acc, 0));
     }
   );
 
@@ -121,17 +136,7 @@ export async function registerAccountRoutes(app: FastifyInstance): Promise<void>
       });
       const deltas = await computeAccountBalances(app.prisma, request.user.sub);
 
-      return reply.send({
-        id: updated.id,
-        name: updated.name,
-        type: updated.type,
-        initialBalanceCents: updated.initialBalanceCents,
-        currentBalanceCents: updated.initialBalanceCents + (deltas.get(updated.id) ?? 0),
-        color: updated.color,
-        icon: updated.icon,
-        isArchived: updated.isArchived,
-        createdAt: updated.createdAt.toISOString(),
-      });
+      return reply.send(serializeAccount(updated, deltas.get(updated.id) ?? 0));
     }
   );
 

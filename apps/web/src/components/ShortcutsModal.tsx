@@ -11,6 +11,8 @@ const SHORTCUTS = [
   { keys: "G depois D", desc: "Ir para Dashboard" },
   { keys: "G depois T", desc: "Ir para Lançamentos" },
   { keys: "G depois R", desc: "Ir para Recorrentes" },
+  { keys: "G depois F", desc: "Ir para Cartões & Faturas" },
+  { keys: "G depois B", desc: "Ir para Orçamentos & Metas" },
   { keys: "G depois A", desc: "Ir para Contas" },
   { keys: "G depois C", desc: "Ir para Categorias" },
   { keys: "G depois S", desc: "Ir para Configurações" },
