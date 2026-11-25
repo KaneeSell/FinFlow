@@ -1,0 +1,37 @@
+appId: com.finflow.app
+productName: FinFlow
+copyright: Copyright © 2026 FinFlow
+directories:
+  output: ../../release/desktop
+files:
+  - dist/**/*
+  - package.json
+extraResources:
+  - from: ../web/dist
+    to: web-dist
+  - from: ../api/dist
+    to: api/dist
+  - from: ../api/prisma
+    to: api/prisma
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+    - target: msi
+      arch:
+        - x64
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+msi:
+  oneClick: false
+linux:
+  category: Finance
+  target:
+    - target: AppImage
+      arch:
+        - x64
+    - target: deb
+      arch:
+        - x64

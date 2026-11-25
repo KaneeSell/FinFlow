@@ -1,0 +1,122 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id             String          @id @default(cuid())
+  name           String
+  email          String          @unique
+  passwordHash   String
+  currency       String          @default("BRL")
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  accounts       Account[]
+  categories     Category[]
+  transactions   Transaction[]
+  recurringRules RecurringRule[]
+  refreshTokens  RefreshToken[]
+}
+
+model RefreshToken {
+  id        String    @id @default(cuid())
+  tokenHash String    @unique
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+}
+
+model Account {
+  id                  String          @id @default(cuid())
+  userId              String
+  user                User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name                String
+  type                String          @default("CHECKING")
+  initialBalanceCents Int             @default(0)
+  color               String          @default("#10b981")
+  icon                String          @default("landmark")
+  isArchived          Boolean         @default(false)
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+  transactions        Transaction[]   @relation("SourceAccount")
+  incomingTransfers   Transaction[]   @relation("DestinationAccount")
+  recurringRules      RecurringRule[]
+
+  @@index([userId])
+}
+
+model Category {
+  id               String          @id @default(cuid())
+  userId           String
+  user             User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name             String
+  type             String
+  color            String          @default("#6366f1")
+  icon             String          @default("tag")
+  budgetLimitCents Int?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  transactions     Transaction[]
+  recurringRules   RecurringRule[]
+
+  @@index([userId])
+}
+
+model RecurringRule {
+  id           String        @id @default(cuid())
+  userId       String
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accountId    String
+  account      Account       @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  categoryId   String?
+  category     Category?     @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  title        String
+  type         String
+  amountCents  Int
+  frequency    String        @default("MONTHLY")
+  dayOfMonth   Int?
+  startDate    DateTime
+  endDate      DateTime?
+  nextRunDate  DateTime
+  isActive     Boolean       @default(true)
+  notes        String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  transactions Transaction[]
+
+  @@index([userId, isActive, nextRunDate])
+}
+
+model Transaction {
+  id                   String         @id @default(cuid())
+  userId               String
+  user                 User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accountId            String
+  account              Account        @relation("SourceAccount", fields: [accountId], references: [id], onDelete: Cascade)
+  destinationAccountId String?
+  destinationAccount   Account?       @relation("DestinationAccount", fields: [destinationAccountId], references: [id], onDelete: SetNull)
+  categoryId           String?
+  category             Category?      @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  recurringRuleId      String?
+  recurringRule        RecurringRule? @relation(fields: [recurringRuleId], references: [id], onDelete: SetNull)
+  title                String
+  type                 String
+  amountCents          Int
+  date                 DateTime
+  status               String         @default("PAID")
+  notes                String?
+  tags                 String         @default("[]")
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+
+  @@index([userId, date])
+  @@index([accountId])
+}
