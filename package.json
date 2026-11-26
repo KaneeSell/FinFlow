@@ -3,11 +3,14 @@
   "version": "1.0.0",
   "private": true,
   "description": "FinFlow — Plataforma multiplataforma de finanças pessoais (Local-first ou Servidor Remoto)",
+  "author": "Kane'e Sell <kanee.sell@gmail.com>",
+  "homepage": "https://github.com/KaneeSell/FinFlow",
   "workspaces": [
     "packages/*",
     "apps/*"
   ],
   "scripts": {
+    "postinstall": "npm run db:generate",
     "dev": "concurrently -n api,web -c cyan,magenta \"npm run dev:api\" \"npm run dev:web\"",
     "dev:api": "npm run dev --workspace=@finflow/api",
     "dev:web": "npm run dev --workspace=@finflow/web",

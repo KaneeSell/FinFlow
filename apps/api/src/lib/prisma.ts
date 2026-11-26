@@ -1,13 +1,11 @@
 import { PrismaClient } from "@prisma/client";
+import { resolveDatabaseUrl } from "./db-bootstrap.js";
 
 export function createPrismaClient(databaseUrl?: string): PrismaClient {
-  return new PrismaClient(
-    databaseUrl
-      ? {
-          datasources: {
-            db: { url: databaseUrl },
-          },
-        }
-      : undefined
-  );
+  const url = resolveDatabaseUrl(databaseUrl);
+  return new PrismaClient({
+    datasources: {
+      db: { url },
+    },
+  });
 }

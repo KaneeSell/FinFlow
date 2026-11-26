@@ -6,6 +6,7 @@ import rateLimit from "@fastify/rate-limit";
 import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
 import type { PrismaClient } from "@prisma/client";
+import { ensureDatabaseSchema } from "./lib/db-bootstrap.js";
 import { createPrismaClient } from "./lib/prisma.js";
 import { registerAuthRoutes } from "./routes/auth.js";
 import { registerAccountRoutes } from "./routes/accounts.js";
@@ -55,6 +56,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   });
 
   const prisma = createPrismaClient(options.databaseUrl ?? process.env.DATABASE_URL);
+  await ensureDatabaseSchema(prisma);
   app.decorate("prisma", prisma);
 
   app.addHook("onClose", async () => {

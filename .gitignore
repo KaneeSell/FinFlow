@@ -8,6 +8,7 @@ dist/
 build/
 out/
 release/
+apps/desktop/build-resources/
 *.tsbuildinfo
 
 # Database & local data

@@ -12,8 +12,10 @@ function startLocalApiServer(): void {
   const apiEntry = app.isPackaged
     ? path.join(process.resourcesPath, "api", "dist", "server.js")
     : path.resolve(__dirname, "../../api/dist/server.js");
+  const apiCwd = path.dirname(path.dirname(apiEntry));
 
   apiProcess = fork(apiEntry, [], {
+    cwd: apiCwd,
     env: {
       ...process.env,
       PORT: LOCAL_API_PORT,
@@ -23,6 +25,20 @@ function startLocalApiServer(): void {
     },
     stdio: "inherit",
   });
+}
+
+async function waitForLocalApi(timeoutMs = 10000): Promise<void> {
+  const healthUrl = `http://127.0.0.1:${LOCAL_API_PORT}/health`;
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < timeoutMs) {
+    try {
+      const res = await fetch(healthUrl);
+      if (res.ok) return;
+    } catch {
+      // API still booting
+    }
+    await new Promise((resolve) => setTimeout(resolve, 150));
+  }
 }
 
 function createWindow(): void {
@@ -52,9 +68,10 @@ function createWindow(): void {
   }
 }
 
-void app.whenReady().then(() => {
+void app.whenReady().then(async () => {
   if (process.env.FINFLOW_SKIP_LOCAL_API !== "true") {
     startLocalApiServer();
+    await waitForLocalApi();
   }
   createWindow();
 

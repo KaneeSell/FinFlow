@@ -5,9 +5,14 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  verify:
+  verify-and-e2e:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -31,3 +36,114 @@ jobs:
 
       - name: Run E2E Tests
         run: npm run test:e2e
+
+  build-windows:
+    needs: verify-and-e2e
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      - run: npm run db:generate
+      - run: npm run build
+      - run: npm run prepare:api --workspace=@finflow/desktop
+      - run: npm run smoke:api --workspace=@finflow/desktop
+
+      - name: Package Windows (.exe & .msi)
+        run: npm run package:win --workspace=@finflow/desktop
+
+      - name: Verify Windows installers exist
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem -Path release/desktop -Filter *.exe
+          $msi = Get-ChildItem -Path release/desktop -Filter *.msi
+          if (-not $exe) { throw "Missing .exe installer in release/desktop" }
+          if (-not $msi) { throw "Missing .msi installer in release/desktop" }
+          $exe.Name; $msi.Name
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-installers
+          path: |
+            release/desktop/*.exe
+            release/desktop/*.msi
+
+  build-linux:
+    needs: verify-and-e2e
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      - run: npm run db:generate
+      - run: npm run build
+      - run: npm run prepare:api --workspace=@finflow/desktop
+      - run: npm run smoke:api --workspace=@finflow/desktop
+
+      - name: Package Linux (.AppImage & .deb)
+        run: npm run package:linux --workspace=@finflow/desktop
+
+      - name: Verify Linux installers exist
+        run: |
+          ls -la release/desktop/
+          test -n "$(find release/desktop -maxdepth 1 -name '*.AppImage' -print -quit)"
+          test -n "$(find release/desktop -maxdepth 1 -name '*.deb' -print -quit)"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-installers
+          path: |
+            release/desktop/*.AppImage
+            release/desktop/*.deb
+
+  build-android:
+    needs: verify-and-e2e
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: android-actions/setup-android@v3
+
+      - run: npm ci
+      - run: npm run build:shared
+      - run: npm run build:web
+
+      - name: Sync & Build Android (.apk & .aab)
+        working-directory: apps/mobile
+        run: |
+          npx cap add android || true
+          npx cap sync android
+          cd android
+          ./gradlew assembleDebug bundleRelease
+
+      - name: Verify Android outputs exist
+        run: |
+          test -n "$(find apps/mobile/android/app/build/outputs/apk/debug -name '*.apk' -print -quit)"
+          test -n "$(find apps/mobile/android/app/build/outputs/bundle/release -name '*.aab' -print -quit)"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-builds
+          path: |
+            apps/mobile/android/app/build/outputs/apk/debug/*.apk
+            apps/mobile/android/app/build/outputs/bundle/release/*.aab

@@ -9,10 +9,8 @@ files:
 extraResources:
   - from: ../web/dist
     to: web-dist
-  - from: ../api/dist
-    to: api/dist
-  - from: ../api/prisma
-    to: api/prisma
+  - from: build-resources/api
+    to: api
 win:
   target:
     - target: nsis
