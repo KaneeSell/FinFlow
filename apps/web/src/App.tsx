@@ -29,14 +29,24 @@ import type {
   OpenFinanceConnectionDTO,
   RecurringRuleDTO,
   TransactionDTO,
+  UpdateCheckResult,
   WebhookConfigDTO,
   WorkspaceDTO,
 } from "@finflow/shared";
+import { DEFAULT_UPDATE_CHECK_INTERVAL_MS } from "@finflow/shared";
 import { CommandPalette, type AppPage } from "./components/CommandPalette";
 import { RecurringModal } from "./components/RecurringModal";
 import { ShortcutsModal } from "./components/ShortcutsModal";
 import { TransactionModal } from "./components/TransactionModal";
+import { UpdateModal } from "./components/UpdateModal";
 import { api, getStoredSession, saveStoredSession, type AuthSession } from "./lib/api";
+import {
+  checkForAppUpdate,
+  getAppVersion,
+  getAutoUpdateCheckEnabled,
+  setAutoUpdateCheckEnabled,
+  triggerAppUpdate,
+} from "./lib/updater";
 import { AccountsPage } from "./pages/AccountsPage";
 import { AuthPage } from "./pages/AuthPage";
 import { BudgetsGoalsPage } from "./pages/BudgetsGoalsPage";
@@ -100,6 +110,15 @@ export function App() {
   const [recModalOpen, setRecModalOpen] = useState(false);
   const [editingRec, setEditingRec] = useState<RecurringRuleDTO | null>(null);
 
+  const [updateInfo, setUpdateInfo] = useState<UpdateCheckResult | null>(null);
+  const [updateModalOpen, setUpdateModalOpen] = useState(false);
+  const [updateDownloading, setUpdateDownloading] = useState(false);
+  const [updateProgress, setUpdateProgress] = useState(0);
+  const [updateError, setUpdateError] = useState<string | null>(null);
+  const [checkingUpdate, setCheckingUpdate] = useState(false);
+  const [autoUpdateEnabled, setAutoUpdateEnabled] = useState(() => getAutoUpdateCheckEnabled());
+  const dismissedVersionRef = useRef<string | null>(null);
+
   const pendingGoKey = useRef(false);
 
   useEffect(() => {
@@ -157,6 +176,80 @@ export function App() {
   useEffect(() => {
     void loadAllData();
   }, [loadAllData]);
+
+  const runUpdateCheck = useCallback(async (manual = false) => {
+    setCheckingUpdate(true);
+    setUpdateError(null);
+    try {
+      const info = await checkForAppUpdate();
+      setUpdateInfo(info);
+      if (info.hasUpdate && (manual || dismissedVersionRef.current !== info.latestVersion)) {
+        setUpdateModalOpen(true);
+      }
+    } catch (err) {
+      if (manual) {
+        setUpdateError(err instanceof Error ? err.message : "Erro ao verificar atualizações.");
+      }
+    } finally {
+      setCheckingUpdate(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    const unsubscribe = window.finflowDesktop?.updates?.onUpdateStatus((event) => {
+      if (event.state === "available" && event.info) {
+        setUpdateInfo(event.info);
+        if (dismissedVersionRef.current !== event.info.latestVersion) {
+          setUpdateModalOpen(true);
+        }
+      } else if (event.state === "downloading") {
+        setUpdateDownloading(true);
+        setUpdateProgress(event.progress ?? 0);
+      } else if (event.state === "error") {
+        setUpdateDownloading(false);
+        setUpdateError(event.error ?? "Falha ao baixar atualização.");
+      }
+    });
+    return () => {
+      unsubscribe?.();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!autoUpdateEnabled) return;
+    if (import.meta.env.MODE === "test") return;
+    if (typeof window !== "undefined" && window.location.port === "4173") return;
+
+    const initialTimer = window.setTimeout(() => {
+      void runUpdateCheck(false);
+    }, 10_000);
+    const interval = window.setInterval(() => {
+      void runUpdateCheck(false);
+    }, DEFAULT_UPDATE_CHECK_INTERVAL_MS);
+
+    return () => {
+      window.clearTimeout(initialTimer);
+      window.clearInterval(interval);
+    };
+  }, [autoUpdateEnabled, runUpdateCheck]);
+
+  const handleAcceptUpdate = useCallback(async () => {
+    if (!updateInfo) return;
+    setUpdateError(null);
+    if (window.finflowDesktop?.updates && updateInfo.downloadUrl) {
+      setUpdateDownloading(true);
+      setUpdateProgress(0);
+    }
+    try {
+      await triggerAppUpdate(updateInfo);
+      if (!window.finflowDesktop?.updates) {
+        setUpdateModalOpen(false);
+      }
+    } catch (err) {
+      setUpdateDownloading(false);
+      setUpdateError(err instanceof Error ? err.message : "Falha ao atualizar.");
+    }
+  }, [updateInfo]);
 
   useEffect(() => {
     if (!session) return;
@@ -519,6 +612,17 @@ export function App() {
             onOpenShortcuts={() => setShortcutsOpen(true)}
             onLogout={handleLogout}
             onRefresh={() => void loadAllData()}
+            appVersion={getAppVersion()}
+            updateInfo={updateInfo}
+            checkingUpdate={checkingUpdate}
+            autoUpdateEnabled={autoUpdateEnabled}
+            onToggleAutoUpdate={() => {
+              const next = !autoUpdateEnabled;
+              setAutoUpdateEnabled(next);
+              setAutoUpdateCheckEnabled(next);
+            }}
+            onCheckForUpdates={() => void runUpdateCheck(true)}
+            onOpenUpdateModal={() => setUpdateModalOpen(true)}
           />
         )}
       </main>
@@ -617,6 +721,21 @@ export function App() {
         accounts={accounts}
         categories={categories}
         editing={editingRec}
+      />
+
+      <UpdateModal
+        open={updateModalOpen}
+        info={updateInfo}
+        downloading={updateDownloading}
+        progress={updateProgress}
+        error={updateError}
+        onAccept={() => void handleAcceptUpdate()}
+        onDismiss={() => {
+          if (updateInfo) {
+            dismissedVersionRef.current = updateInfo.latestVersion;
+          }
+          setUpdateModalOpen(false);
+        }}
       />
     </div>
   );

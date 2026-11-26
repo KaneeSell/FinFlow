@@ -86,6 +86,8 @@ jobs:
       - run: npm ci
       - run: npm run db:generate
       - run: npm run build
+        env:
+          FINFLOW_APP_VERSION: ${{ needs.verify-and-e2e.outputs.version }}
       - run: npm run prepare:api --workspace=@finflow/desktop
       - run: npm run smoke:api --workspace=@finflow/desktop
 
@@ -122,6 +124,8 @@ jobs:
       - run: npm ci
       - run: npm run db:generate
       - run: npm run build
+        env:
+          FINFLOW_APP_VERSION: ${{ needs.verify-and-e2e.outputs.version }}
       - run: npm run prepare:api --workspace=@finflow/desktop
       - run: npm run smoke:api --workspace=@finflow/desktop
 
@@ -165,6 +169,8 @@ jobs:
       - run: npm ci
       - run: npm run build:shared
       - run: npm run build:web
+        env:
+          FINFLOW_APP_VERSION: ${{ needs.verify-and-e2e.outputs.version }}
 
       - name: Sync & Build Android (.apk & .aab)
         working-directory: apps/mobile

@@ -2,17 +2,19 @@ import { useState } from "react";
 import {
   Bell,
   CloudUpload,
+  Download,
   EyeOff,
   Keyboard,
   Lock,
   LogOut,
   Moon,
+  RefreshCw,
   Server,
   ShieldCheck,
   Sun,
   Trash2,
 } from "lucide-react";
-import type { UserDTO, WebhookConfigDTO, WebhookProvider } from "@finflow/shared";
+import type { UpdateCheckResult, UserDTO, WebhookConfigDTO, WebhookProvider } from "@finflow/shared";
 import { api, getActiveApiBaseUrl, getServerConfig } from "../lib/api";
 import { flushOfflineOutbox, getOfflineOutbox } from "../lib/offline-sync";
 import { ServerConfigModal } from "../components/ServerConfigModal";
@@ -27,6 +29,13 @@ interface SettingsPageProps {
   onOpenShortcuts: () => void;
   onLogout: () => void;
   onRefresh?: () => void;
+  appVersion?: string;
+  updateInfo?: UpdateCheckResult | null;
+  checkingUpdate?: boolean;
+  autoUpdateEnabled?: boolean;
+  onToggleAutoUpdate?: () => void;
+  onCheckForUpdates?: () => void;
+  onOpenUpdateModal?: () => void;
 }
 
 export function SettingsPage({
@@ -39,6 +48,13 @@ export function SettingsPage({
   onOpenShortcuts,
   onLogout,
   onRefresh,
+  appVersion = "1.0.0",
+  updateInfo = null,
+  checkingUpdate = false,
+  autoUpdateEnabled = true,
+  onToggleAutoUpdate,
+  onCheckForUpdates,
+  onOpenUpdateModal,
 }: SettingsPageProps) {
   const [serverModalOpen, setServerModalOpen] = useState(false);
   const [serverConfig, setServerConfig] = useState(getServerConfig);
@@ -353,6 +369,71 @@ export function SettingsPage({
             </button>
           </div>
         ))}
+      </div>
+
+      {/* App Updates */}
+      <div className="rounded-2xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900 space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <RefreshCw className={`h-5 w-5 text-emerald-400 ${checkingUpdate ? "animate-spin" : ""}`} />
+            <div>
+              <h2 className="text-sm font-semibold">Atualizações do Aplicativo</h2>
+              <p className="text-xs text-zinc-500">
+                Versão instalada: <strong>v{appVersion}</strong>
+                {updateInfo
+                  ? updateInfo.hasUpdate
+                    ? ` · Nova versão v${updateInfo.latestVersion} disponível!`
+                    : " · Você está na versão mais recente."
+                  : ""}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            {onCheckForUpdates && (
+              <button
+                type="button"
+                disabled={checkingUpdate}
+                onClick={onCheckForUpdates}
+                className="rounded-xl border border-zinc-300 px-3 py-1.5 text-xs font-medium hover:bg-zinc-100 disabled:opacity-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
+              >
+                {checkingUpdate ? "Verificando..." : "Verificar Atualizações"}
+              </button>
+            )}
+            {updateInfo?.hasUpdate && onOpenUpdateModal && (
+              <button
+                type="button"
+                onClick={onOpenUpdateModal}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-500 px-3 py-1.5 text-xs font-semibold text-zinc-950 hover:bg-emerald-400"
+              >
+                <Download className="h-3.5 w-3.5" />
+                Atualizar para v{updateInfo.latestVersion}
+              </button>
+            )}
+          </div>
+        </div>
+
+        {onToggleAutoUpdate && (
+          <div className="flex items-center justify-between border-t border-zinc-200 pt-3 dark:border-zinc-800">
+            <div>
+              <p className="text-xs font-medium">Verificação automática recorrente</p>
+              <p className="text-[11px] text-zinc-500">
+                Verifica novas versões ao abrir e a cada 30 minutos
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={onToggleAutoUpdate}
+              className={`rounded-xl px-3 py-1.5 text-xs font-semibold ${
+                autoUpdateEnabled
+                  ? "bg-emerald-500 text-zinc-950"
+                  : "border border-zinc-300 dark:border-zinc-700"
+              }`}
+            >
+              {autoUpdateEnabled ? "Ativada" : "Desativada"}
+            </button>
+          </div>
+        )}
       </div>
 
       {/* User & Logout */}

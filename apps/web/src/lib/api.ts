@@ -45,11 +45,15 @@ import type {
 const STORAGE_SERVER_KEY = "finflow:server_config";
 const STORAGE_AUTH_KEY = "finflow:auth_tokens";
 
+import type { DesktopUpdatesBridge } from "./updater";
+
 declare global {
   interface Window {
     finflowDesktop?: {
       isElectron: boolean;
       defaultApiUrl: string;
+      appVersion?: string;
+      updates?: DesktopUpdatesBridge;
     };
   }
 }

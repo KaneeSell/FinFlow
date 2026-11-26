@@ -1,9 +1,19 @@
 import { app, BrowserWindow } from "electron";
 import { fork, type ChildProcess } from "node:child_process";
 import path from "node:path";
+import { registerDesktopUpdater } from "./updater";
 
 let apiProcess: ChildProcess | null = null;
+let mainWindow: BrowserWindow | null = null;
+let disposeUpdater: (() => void) | null = null;
 const LOCAL_API_PORT = process.env.FINFLOW_LOCAL_PORT ?? "3333";
+
+function stopLocalApiServer(): void {
+  if (apiProcess) {
+    apiProcess.kill();
+    apiProcess = null;
+  }
+}
 
 function startLocalApiServer(): void {
   const userDataDir = app.getPath("userData");
@@ -43,8 +53,9 @@ async function waitForLocalApi(timeoutMs = 10000): Promise<void> {
 
 function createWindow(): void {
   process.env.FINFLOW_LOCAL_API_URL = `http://127.0.0.1:${LOCAL_API_PORT}`;
+  process.env.FINFLOW_APP_VERSION = app.getVersion();
 
-  const win = new BrowserWindow({
+  mainWindow = new BrowserWindow({
     width: 1280,
     height: 820,
     minWidth: 380,
@@ -58,13 +69,17 @@ function createWindow(): void {
     },
   });
 
+  mainWindow.on("closed", () => {
+    mainWindow = null;
+  });
+
   if (process.env.VITE_DEV_SERVER_URL) {
-    void win.loadURL(process.env.VITE_DEV_SERVER_URL);
+    void mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL);
   } else {
     const indexHtml = app.isPackaged
       ? path.join(process.resourcesPath, "web-dist", "index.html")
       : path.resolve(__dirname, "../../web/dist/index.html");
-    void win.loadFile(indexHtml);
+    void mainWindow.loadFile(indexHtml);
   }
 }
 
@@ -74,6 +89,7 @@ void app.whenReady().then(async () => {
     await waitForLocalApi();
   }
   createWindow();
+  disposeUpdater = registerDesktopUpdater(() => mainWindow, stopLocalApiServer);
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -83,10 +99,11 @@ void app.whenReady().then(async () => {
 });
 
 app.on("window-all-closed", () => {
-  if (apiProcess) {
-    apiProcess.kill();
-    apiProcess = null;
+  if (disposeUpdater) {
+    disposeUpdater();
+    disposeUpdater = null;
   }
+  stopLocalApiServer();
   if (process.platform !== "darwin") {
     app.quit();
   }
