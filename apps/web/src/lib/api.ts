@@ -47,12 +47,19 @@ const STORAGE_AUTH_KEY = "finflow:auth_tokens";
 
 import type { DesktopUpdatesBridge } from "./updater";
 
+export interface DesktopServerBridge {
+  getPort: () => Promise<number>;
+  checkPort: (port: number) => Promise<{ available: boolean; inUseByFinFlow: boolean }>;
+  setPort: (port: number) => Promise<{ ok: boolean; port?: number; apiUrl?: string; error?: string }>;
+}
+
 declare global {
   interface Window {
     finflowDesktop?: {
       isElectron: boolean;
       defaultApiUrl: string;
       appVersion?: string;
+      server?: DesktopServerBridge;
       updates?: DesktopUpdatesBridge;
     };
   }
@@ -71,9 +78,17 @@ export function getServerConfig(): ServerConnectionConfig {
     const raw = localStorage.getItem(STORAGE_SERVER_KEY);
     if (raw) {
       const parsed = JSON.parse(raw) as ServerConnectionConfig;
+      const localPort =
+        typeof parsed.localPort === "number" &&
+        Number.isInteger(parsed.localPort) &&
+        parsed.localPort >= 1024 &&
+        parsed.localPort <= 65535
+          ? parsed.localPort
+          : undefined;
       if (parsed.mode === "remote" && parsed.remoteUrl) {
-        return parsed;
+        return { mode: "remote", remoteUrl: parsed.remoteUrl, localPort };
       }
+      return { mode: "local", remoteUrl: "", localPort };
     }
   } catch {
     // ignore corrupted storage
@@ -89,6 +104,9 @@ export function getActiveApiBaseUrl(): string {
   const cfg = getServerConfig();
   if (cfg.mode === "remote" && cfg.remoteUrl) {
     return cfg.remoteUrl.replace(/\/+$/, "");
+  }
+  if (cfg.localPort) {
+    return `http://127.0.0.1:${cfg.localPort}`;
   }
   return getDefaultLocalApiUrl().replace(/\/+$/, "");
 }

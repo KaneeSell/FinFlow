@@ -4,6 +4,11 @@ contextBridge.exposeInMainWorld("finflowDesktop", {
   isElectron: true,
   defaultApiUrl: process.env.FINFLOW_LOCAL_API_URL ?? "http://127.0.0.1:3333",
   appVersion: process.env.FINFLOW_APP_VERSION ?? "1.0.0",
+  server: {
+    getPort: () => ipcRenderer.invoke("finflow:server:get-port"),
+    checkPort: (port: number) => ipcRenderer.invoke("finflow:server:check-port", port),
+    setPort: (port: number) => ipcRenderer.invoke("finflow:server:set-port", port),
+  },
   updates: {
     checkForUpdates: () => ipcRenderer.invoke("finflow:updates:check"),
     downloadAndInstall: (downloadUrl: string) =>

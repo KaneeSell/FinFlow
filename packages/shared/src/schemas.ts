@@ -131,6 +131,7 @@ export const updateRecurringRuleSchema = createRecurringRuleSchema.partial().ext
 export const serverConnectionSchema = z.object({
   mode: z.enum(["local", "remote"]),
   remoteUrl: z.string().url("URL do servidor inválida").or(z.literal("")),
+  localPort: z.number().int().min(1024).max(65535).optional(),
 });
 
 export type RegisterInput = z.infer<typeof registerSchema>;
