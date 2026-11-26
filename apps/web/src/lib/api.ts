@@ -9,27 +9,37 @@ import type {
   CreateAutoRuleInput,
   CreateCategoryInput,
   CreateGoalInput,
+  CreateInvestmentInput,
+  CreateOpenFinanceInput,
   CreateRecurringRuleInput,
+  CreateSharedExpenseInput,
   CreateTransactionInput,
   CreateWebhookInput,
+  CreateWorkspaceInput,
   CreditCardInvoiceDTO,
   DashboardSummaryDTO,
   GoalDTO,
   ImportTransactionsInput,
+  InvestmentAssetDTO,
   LoginInput,
+  NetWorthSummaryDTO,
+  OpenFinanceConnectionDTO,
   PayInvoiceInput,
   RecurringRuleDTO,
   RegisterInput,
   ServerConnectionConfig,
+  SharedExpenseDTO,
   SyncMutationInput,
   TransactionDTO,
   UpdateAccountInput,
   UpdateCategoryInput,
   UpdateGoalInput,
+  UpdateInvestmentInput,
   UpdateRecurringRuleInput,
   UpdateTransactionInput,
   UserDTO,
   WebhookConfigDTO,
+  WorkspaceDTO,
 } from "@finflow/shared";
 
 const STORAGE_SERVER_KEY = "finflow:server_config";
@@ -408,6 +418,96 @@ export const api = {
         { method: "POST" }
       ),
     remove: (id: string) => request<void>(`/api/v1/webhooks/${id}`, { method: "DELETE" }),
+  },
+  investments: {
+    list: () => request<InvestmentAssetDTO[]>("/api/v1/investments"),
+    create: (input: CreateInvestmentInput) =>
+      request<InvestmentAssetDTO>("/api/v1/investments", {
+        method: "POST",
+        body: JSON.stringify(input),
+      }),
+    update: (id: string, input: UpdateInvestmentInput) =>
+      request<InvestmentAssetDTO>(`/api/v1/investments/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify(input),
+      }),
+    remove: (id: string) => request<void>(`/api/v1/investments/${id}`, { method: "DELETE" }),
+    netWorth: () => request<NetWorthSummaryDTO>("/api/v1/investments/net-worth"),
+  },
+  workspaces: {
+    list: () => request<WorkspaceDTO[]>("/api/v1/workspaces"),
+    create: (input: CreateWorkspaceInput) =>
+      request<WorkspaceDTO>("/api/v1/workspaces", {
+        method: "POST",
+        body: JSON.stringify(input),
+      }),
+    addMember: (id: string, memberName: string) =>
+      request<{ id: string; memberName: string }>(`/api/v1/workspaces/${id}/members`, {
+        method: "POST",
+        body: JSON.stringify({ memberName }),
+      }),
+    expenses: (id: string) =>
+      request<{
+        expenses: SharedExpenseDTO[];
+        balances: Array<{ memberName: string; netBalanceCents: number }>;
+      }>(`/api/v1/workspaces/${id}/expenses`),
+    createExpense: (id: string, input: CreateSharedExpenseInput) =>
+      request<SharedExpenseDTO>(`/api/v1/workspaces/${id}/expenses`, {
+        method: "POST",
+        body: JSON.stringify(input),
+      }),
+    settleExpense: (id: string, expenseId: string) =>
+      request<{ id: string; settled: boolean }>(
+        `/api/v1/workspaces/${id}/expenses/${expenseId}/settle`,
+        { method: "PATCH" }
+      ),
+  },
+  openFinance: {
+    list: () => request<OpenFinanceConnectionDTO[]>("/api/v1/open-finance/connections"),
+    connect: (input: CreateOpenFinanceInput) =>
+      request<OpenFinanceConnectionDTO>("/api/v1/open-finance/connections", {
+        method: "POST",
+        body: JSON.stringify(input),
+      }),
+    sync: (id: string) =>
+      request<{ syncedAt: string; imported: number }>(
+        `/api/v1/open-finance/connections/${id}/sync`,
+        { method: "POST" }
+      ),
+    remove: (id: string) =>
+      request<void>(`/api/v1/open-finance/connections/${id}`, { method: "DELETE" }),
+  },
+  insights: {
+    get: () =>
+      request<{
+        month: string;
+        netWorthCents: number;
+        recurringSharePercent: number;
+        fire: { fireNumberCents: number; progressPercent: number; yearsToFire: number | null };
+        tips: string[];
+      }>("/api/v1/insights"),
+    parseNl: (text: string) =>
+      request<{
+        title: string;
+        amountCents: number;
+        type: "INCOME" | "EXPENSE";
+        date: string;
+        categoryId: string | null;
+      }>("/api/v1/insights/parse-nl", {
+        method: "POST",
+        body: JSON.stringify({ text }),
+      }),
+    parseNfce: (input: string) =>
+      request<{
+        valid: boolean;
+        accessKey: string | null;
+        cnpj: string | null;
+        yearMonth: string | null;
+        amountCents: number | null;
+      }>("/api/v1/insights/parse-nfce", {
+        method: "POST",
+        body: JSON.stringify({ input }),
+      }),
   },
   recurring: {
     list: () => request<RecurringRuleDTO[]>("/api/v1/recurring"),

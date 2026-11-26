@@ -4,6 +4,7 @@ import {
   CreditCard,
   EyeOff,
   HelpCircle,
+  Landmark,
   LayoutDashboard,
   Moon,
   Plus,
@@ -12,6 +13,7 @@ import {
   Settings,
   Tag,
   Target,
+  Users,
   Wallet,
 } from "lucide-react";
 
@@ -21,6 +23,8 @@ export type AppPage =
   | "recurring"
   | "cards"
   | "budgets"
+  | "investments"
+  | "workspaces"
   | "accounts"
   | "categories"
   | "settings";
@@ -98,6 +102,20 @@ export function CommandPalette({
       hint: "G B",
       icon: <Target className="h-4 w-4" />,
       action: () => onNavigate("budgets"),
+    },
+    {
+      id: "nav-investments",
+      label: "Ir para Patrimônio & Investimentos",
+      hint: "G I",
+      icon: <Landmark className="h-4 w-4" />,
+      action: () => onNavigate("investments"),
+    },
+    {
+      id: "nav-workspaces",
+      label: "Ir para Espaços & Open Finance",
+      hint: "G W",
+      icon: <Users className="h-4 w-4" />,
+      action: () => onNavigate("workspaces"),
     },
     {
       id: "nav-accounts",

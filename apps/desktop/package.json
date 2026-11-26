@@ -1,6 +1,6 @@
 {
   "name": "@finflow/desktop",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "description": "FinFlow Desktop App (Windows & Linux)",
   "main": "./dist/main.js",

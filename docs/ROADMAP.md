@@ -18,7 +18,7 @@ O desenvolvimento é dividido em **4 grandes fases completas**, cada uma entrega
 
 ---
 
-## Fase 2 — Cartões de Crédito, Orçamentos, Metas & APIs Financeiras
+## Fase 2 — Cartões de Crédito, Orçamentos, Metas & APIs Financeiras *(Entregue)*
 
 - **Módulo Completo de Cartões de Crédito:**
   - Dia de fechamento e dia de vencimento por cartão.
@@ -40,7 +40,7 @@ O desenvolvimento é dividido em **4 grandes fases completas**, cada uma entrega
 
 ---
 
-## Fase 3 — Offline-First Sync Engine, Automação & Segurança Avançada
+## Fase 3 — Offline-First Sync Engine, Automação & Segurança Avançada *(Entregue)*
 
 - **Offline-First Real (SQLite Local <-> Servidor Remoto):**
   - Fila local (`outbox`) no Desktop e Android para lançar gastos mesmo sem internet e sincronizar automaticamente ao reconectar, com resolução de conflitos determinística (Last-Write-Wins por campo / HLC).
@@ -59,7 +59,7 @@ O desenvolvimento é dividido em **4 grandes fases completas**, cada uma entrega
 
 ---
 
-## Fase 4 — Patrimônio, Investimentos, Open Finance & Colaboração
+## Fase 4 — Patrimônio, Investimentos, Open Finance & Colaboração *(Entregue)*
 
 - **Patrimônio Líquido (Net Worth) & Investimentos:**
   - Carteira consolidada (Renda Fixa/CDB/Tesouro, Ações, FIIs, ETFs, Cripto).

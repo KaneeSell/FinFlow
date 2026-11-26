@@ -5,12 +5,14 @@ import {
   CreditCard,
   Eye,
   EyeOff,
+  Landmark,
   LayoutDashboard,
   Plus,
   Repeat,
   Settings,
   Tag,
   Target,
+  Users,
   Wallet,
 } from "lucide-react";
 import type {
@@ -22,9 +24,13 @@ import type {
   CreditCardInvoiceDTO,
   DashboardSummaryDTO,
   GoalDTO,
+  InvestmentAssetDTO,
+  NetWorthSummaryDTO,
+  OpenFinanceConnectionDTO,
   RecurringRuleDTO,
   TransactionDTO,
   WebhookConfigDTO,
+  WorkspaceDTO,
 } from "@finflow/shared";
 import { CommandPalette, type AppPage } from "./components/CommandPalette";
 import { RecurringModal } from "./components/RecurringModal";
@@ -37,9 +43,11 @@ import { BudgetsGoalsPage } from "./pages/BudgetsGoalsPage";
 import { CategoriesPage } from "./pages/CategoriesPage";
 import { CreditCardsPage } from "./pages/CreditCardsPage";
 import { DashboardPage } from "./pages/DashboardPage";
+import { InvestmentsPage } from "./pages/InvestmentsPage";
 import { RecurringPage } from "./pages/RecurringPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { TransactionsPage } from "./pages/TransactionsPage";
+import { WorkspacesPage } from "./pages/WorkspacesPage";
 
 const NAV_ITEMS: Array<{ id: AppPage; label: string; shortcut: string; icon: React.ReactNode }> = [
   { id: "dashboard", label: "Dashboard", shortcut: "G D", icon: <LayoutDashboard className="h-4 w-4" /> },
@@ -47,6 +55,8 @@ const NAV_ITEMS: Array<{ id: AppPage; label: string; shortcut: string; icon: Rea
   { id: "recurring", label: "Recorrentes", shortcut: "G R", icon: <Repeat className="h-4 w-4" /> },
   { id: "cards", label: "Cartões", shortcut: "G F", icon: <CreditCard className="h-4 w-4" /> },
   { id: "budgets", label: "Metas & Orçam.", shortcut: "G B", icon: <Target className="h-4 w-4" /> },
+  { id: "investments", label: "Patrimônio", shortcut: "G I", icon: <Landmark className="h-4 w-4" /> },
+  { id: "workspaces", label: "Espaços", shortcut: "G W", icon: <Users className="h-4 w-4" /> },
   { id: "accounts", label: "Contas", shortcut: "G A", icon: <Wallet className="h-4 w-4" /> },
   { id: "categories", label: "Categorias", shortcut: "G C", icon: <Tag className="h-4 w-4" /> },
   { id: "settings", label: "Configurações", shortcut: "G S", icon: <Settings className="h-4 w-4" /> },
@@ -74,6 +84,10 @@ export function App() {
   const [forecast, setForecast] = useState<CashflowForecastDTO | null>(null);
   const [forecastMonths, setForecastMonths] = useState<3 | 6 | 12>(6);
   const [webhooks, setWebhooks] = useState<WebhookConfigDTO[]>([]);
+  const [assets, setAssets] = useState<InvestmentAssetDTO[]>([]);
+  const [netWorth, setNetWorth] = useState<NetWorthSummaryDTO | null>(null);
+  const [workspaces, setWorkspaces] = useState<WorkspaceDTO[]>([]);
+  const [openFinanceConnections, setOpenFinanceConnections] = useState<OpenFinanceConnectionDTO[]>([]);
   const [rates, setRates] = useState<{ usdBrl: number; eurBrl: number; btcBrl: number } | null>(null);
   const [bcb, setBcb] = useState<{ selicPercent: number; ipcaPercent12m: number } | null>(null);
   const [holidays, setHolidays] = useState<Array<{ date: string; name: string }>>([]);
@@ -96,23 +110,28 @@ export function App() {
     if (!session) return;
     setLoading(true);
     try {
-      const [sum, accs, cats, txs, recs, invs, bgs, gls, rls, fc, whs] = await Promise.all([
-        api.dashboard.summary(month),
-        api.accounts.list(),
-        api.categories.list(),
-        api.transactions.list({
-          month,
-          search: txSearch || undefined,
-          type: txTypeFilter || undefined,
-        }),
-        api.recurring.list(),
-        api.creditCards.invoices(month),
-        api.budgets.list(month),
-        api.goals.list(),
-        api.rules.list(),
-        api.forecast.get(forecastMonths),
-        api.webhooks.list(),
-      ]);
+      const [sum, accs, cats, txs, recs, invs, bgs, gls, rls, fc, whs, asts, nw, wss, ofc] =
+        await Promise.all([
+          api.dashboard.summary(month),
+          api.accounts.list(),
+          api.categories.list(),
+          api.transactions.list({
+            month,
+            search: txSearch || undefined,
+            type: txTypeFilter || undefined,
+          }),
+          api.recurring.list(),
+          api.creditCards.invoices(month),
+          api.budgets.list(month),
+          api.goals.list(),
+          api.rules.list(),
+          api.forecast.get(forecastMonths),
+          api.webhooks.list(),
+          api.investments.list(),
+          api.investments.netWorth(),
+          api.workspaces.list(),
+          api.openFinance.list(),
+        ]);
       setSummary(sum);
       setAccounts(accs);
       setCategories(cats);
@@ -124,6 +143,10 @@ export function App() {
       setAutoRules(rls);
       setForecast(fc);
       setWebhooks(whs);
+      setAssets(asts);
+      setNetWorth(nw);
+      setWorkspaces(wss);
+      setOpenFinanceConnections(ofc);
     } catch {
       // handled by auth/401 or UI
     } finally {
@@ -183,6 +206,8 @@ export function App() {
           r: "recurring",
           f: "cards",
           b: "budgets",
+          i: "investments",
+          w: "workspaces",
           a: "accounts",
           c: "categories",
           s: "settings",
@@ -340,6 +365,7 @@ export function App() {
         {page === "dashboard" && (
           <DashboardPage
             summary={summary}
+            accounts={accounts}
             loading={loading}
             month={month}
             onMonthChange={setMonth}
@@ -353,6 +379,7 @@ export function App() {
               void loadAllData();
             }}
             onGoToTransactions={() => setPage("transactions")}
+            onRefresh={() => void loadAllData()}
           />
         )}
 
@@ -408,6 +435,24 @@ export function App() {
             holidays={holidays}
             month={month}
             onMonthChange={setMonth}
+            privacyMode={privacyMode}
+            onRefresh={() => void loadAllData()}
+          />
+        )}
+
+        {page === "investments" && (
+          <InvestmentsPage
+            assets={assets}
+            netWorth={netWorth}
+            privacyMode={privacyMode}
+            onRefresh={() => void loadAllData()}
+          />
+        )}
+
+        {page === "workspaces" && (
+          <WorkspacesPage
+            workspaces={workspaces}
+            openFinanceConnections={openFinanceConnections}
             privacyMode={privacyMode}
             onRefresh={() => void loadAllData()}
           />

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   ArrowDownRight,
   ArrowUpRight,
@@ -5,13 +6,16 @@ import {
   Check,
   PiggyBank,
   Plus,
+  Sparkles,
   Wallet,
 } from "lucide-react";
-import type { DashboardSummaryDTO } from "@finflow/shared";
+import type { AccountDTO, DashboardSummaryDTO } from "@finflow/shared";
 import { MoneyText } from "../components/MoneyText";
+import { api } from "../lib/api";
 
 interface DashboardPageProps {
   summary: DashboardSummaryDTO | null;
+  accounts?: AccountDTO[];
   loading: boolean;
   month: string;
   onMonthChange: (nextMonth: string) => void;
@@ -19,10 +23,12 @@ interface DashboardPageProps {
   onNewTransaction: () => void;
   onMaterializeRecurring: (id: string) => void;
   onGoToTransactions: () => void;
+  onRefresh?: () => void;
 }
 
 export function DashboardPage({
   summary,
+  accounts = [],
   loading,
   month,
   onMonthChange,
@@ -30,7 +36,59 @@ export function DashboardPage({
   onNewTransaction,
   onMaterializeRecurring,
   onGoToTransactions,
+  onRefresh,
 }: DashboardPageProps) {
+  const [quickInput, setQuickInput] = useState("");
+  const [quickFeedback, setQuickFeedback] = useState<string | null>(null);
+
+  const handleQuickCapture = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const text = quickInput.trim();
+    const defaultAccountId = accounts[0]?.id;
+    if (!text || !defaultAccountId) return;
+
+    setQuickFeedback(null);
+    try {
+      if (text.includes("qrcode") || /^\d{44}$/.test(text)) {
+        const nfce = await api.insights.parseNfce(text);
+        if (nfce.valid) {
+          await api.transactions.create({
+            accountId: defaultAccountId,
+            title: `NFC-e CNPJ ${nfce.cnpj}`,
+            type: "EXPENSE",
+            amountCents: nfce.amountCents ?? 1000,
+            date: new Date().toISOString().slice(0, 10),
+            status: "PAID",
+            tags: ["nfce"],
+          });
+          setQuickInput("");
+          setQuickFeedback("Nota NFC-e lançada com sucesso!");
+          onRefresh?.();
+          return;
+        }
+      }
+
+      const parsed = await api.insights.parseNl(text);
+      if (parsed.amountCents <= 0) {
+        setQuickFeedback("Não identifiquei o valor. Ex: 'Almoço 45,90 hoje'");
+        return;
+      }
+      await api.transactions.create({
+        accountId: defaultAccountId,
+        categoryId: parsed.categoryId,
+        title: parsed.title,
+        type: parsed.type,
+        amountCents: parsed.amountCents,
+        date: parsed.date,
+        status: "PAID",
+      });
+      setQuickInput("");
+      setQuickFeedback(`Lançado: ${parsed.title} (R$ ${(parsed.amountCents / 100).toFixed(2)})`);
+      onRefresh?.();
+    } catch {
+      setQuickFeedback("Erro ao processar entrada rápida.");
+    }
+  };
   if (loading && !summary) {
     return (
       <div className="space-y-4">
@@ -77,6 +135,27 @@ export function DashboardPage({
           </button>
         </div>
       </div>
+
+      {/* Quick NLP / NFC-e Bar */}
+      <form
+        onSubmit={handleQuickCapture}
+        className="flex flex-wrap items-center gap-2 rounded-2xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900"
+      >
+        <Sparkles className="h-4 w-4 shrink-0 text-emerald-400" />
+        <input
+          value={quickInput}
+          onChange={(e) => setQuickInput(e.target.value)}
+          placeholder='Entrada rápida: "Almoço 45,90 alimentação ontem" ou cole URL de NFC-e...'
+          className="flex-1 bg-transparent text-sm outline-none placeholder:text-zinc-500"
+        />
+        <button
+          type="submit"
+          className="rounded-xl bg-emerald-500/15 px-3 py-1.5 text-xs font-semibold text-emerald-400 hover:bg-emerald-500/25"
+        >
+          Lançar
+        </button>
+      </form>
+      {quickFeedback && <p className="text-xs text-emerald-400">{quickFeedback}</p>}
 
       {/* KPI Grid */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">

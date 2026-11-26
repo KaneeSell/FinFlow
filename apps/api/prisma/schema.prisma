@@ -24,8 +24,10 @@ model User {
   recurringRules RecurringRule[]
   refreshTokens  RefreshToken[]
   goals          Goal[]
-  autoRules      AutoRule[]
-  webhooks       WebhookConfig[]
+  autoRules            AutoRule[]
+  webhooks             WebhookConfig[]
+  investments          InvestmentAsset[]
+  openFinanceItems     OpenFinanceConnection[]
 }
 
 model RefreshToken {
@@ -194,6 +196,80 @@ model ProcessedMutation {
   userId           String
   clientMutationId String   @unique
   processedAt      DateTime @default(now())
+
+  @@index([userId])
+}
+
+model InvestmentAsset {
+  id                String   @id @default(cuid())
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  symbol            String
+  name              String
+  assetClass        String   @default("STOCK")
+  quantity          Float
+  avgPriceCents     Int
+  currentPriceCents Int
+  currency          String   @default("BRL")
+  indexer           String?
+  indexerRate       Float?
+  notes             String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([userId])
+}
+
+model Workspace {
+  id        String            @id @default(cuid())
+  name      String
+  type      String            @default("COUPLE")
+  ownerId   String
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+  members   WorkspaceMember[]
+  expenses  SharedExpense[]
+
+  @@index([ownerId])
+}
+
+model WorkspaceMember {
+  id          String    @id @default(cuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  memberName  String
+  memberEmail String?
+  role        String    @default("MEMBER")
+  createdAt   DateTime  @default(now())
+
+  @@index([workspaceId])
+}
+
+model SharedExpense {
+  id               String    @id @default(cuid())
+  workspaceId      String
+  workspace        Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  paidByName       String
+  title            String
+  totalAmountCents Int
+  splitsJson       String
+  settled          Boolean   @default(false)
+  date             DateTime
+  createdAt        DateTime  @default(now())
+
+  @@index([workspaceId])
+}
+
+model OpenFinanceConnection {
+  id              String    @id @default(cuid())
+  userId          String
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider        String    @default("SANDBOX")
+  institutionName String
+  externalItemId  String?
+  status          String    @default("CONNECTED")
+  lastSyncAt      DateTime?
+  createdAt       DateTime  @default(now())
 
   @@index([userId])
 }

@@ -63,7 +63,19 @@ test.describe("FinFlow End-to-End Flows", () => {
     await expect(page.getByRole("dialog", { name: "Atalhos de Teclado" })).toBeVisible();
     await page.keyboard.press("Escape");
 
-    // 8. Mobile First viewport check (390x844)
+    // 8. Phase 4: Quick Natural Language capture + Investments + Workspaces
+    await page.keyboard.press("g");
+    await page.keyboard.press("d");
+    await expect(page.getByRole("heading", { name: "Visão Geral" })).toBeVisible();
+    await page.getByPlaceholder(/Entrada rápida/).fill("Café 18,50 hoje");
+    await page.getByRole("button", { name: "Lançar", exact: true }).click();
+    await expect(page.getByText(/Lançado: Café/)).toBeVisible();
+
+    await page.keyboard.press("g");
+    await page.keyboard.press("i");
+    await expect(page.getByRole("heading", { name: "Patrimônio & Investimentos" })).toBeVisible();
+
+    // 9. Mobile First viewport check (390x844)
     await page.setViewportSize({ width: 390, height: 844 });
     const mobileNav = page.getByRole("navigation", { name: "Navegação Mobile" });
     await expect(mobileNav).toBeVisible();

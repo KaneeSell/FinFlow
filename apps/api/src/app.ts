@@ -21,6 +21,10 @@ import { registerForecastRoutes } from "./routes/forecast.js";
 import { registerSyncRoutes } from "./routes/sync.js";
 import { registerSecurityRoutes } from "./routes/security.js";
 import { registerWebhookRoutes } from "./routes/webhooks.js";
+import { registerInvestmentRoutes } from "./routes/investments.js";
+import { registerWorkspaceRoutes } from "./routes/workspaces.js";
+import { registerOpenFinanceRoutes } from "./routes/open-finance.js";
+import { registerInsightRoutes } from "./routes/insights.js";
 
 declare module "fastify" {
   interface FastifyInstance {
@@ -135,6 +139,10 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   await registerSyncRoutes(app);
   await registerSecurityRoutes(app);
   await registerWebhookRoutes(app);
+  await registerInvestmentRoutes(app);
+  await registerWorkspaceRoutes(app);
+  await registerOpenFinanceRoutes(app);
+  await registerInsightRoutes(app);
 
   return app;
 }
