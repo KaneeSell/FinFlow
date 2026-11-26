@@ -87,6 +87,30 @@ function collectDeps(pkgJsonPath) {
   };
 }
 
+const SKIP_DIRS = new Set([
+  "test",
+  "tests",
+  "__tests__",
+  "example",
+  "examples",
+  "benchmarks",
+  ".github",
+  ".git",
+  "coverage",
+]);
+
+function copyFilter(src) {
+  const base = path.basename(src);
+  if (SKIP_DIRS.has(base)) {
+    try {
+      if (fs.statSync(src).isDirectory()) return false;
+    } catch {
+      return false;
+    }
+  }
+  return true;
+}
+
 function copyPackageTree(pkgName) {
   if (visited.has(pkgName)) return;
   visited.add(pkgName);
@@ -99,6 +123,7 @@ function copyPackageTree(pkgName) {
   fs.cpSync(srcDir, destDir, {
     recursive: true,
     dereference: true,
+    filter: copyFilter,
   });
 
   const deps = collectDeps(path.join(srcDir, "package.json"));
