@@ -75,6 +75,7 @@ function startLocalApiServer(port: number): void {
       PORT: String(port),
       HOST: "127.0.0.1",
       FINFLOW_MODE: "local",
+      FINFLOW_MANAGED_PORT: "true",
       DATABASE_URL: `file:${dbPath}`,
     },
     stdio: "inherit",

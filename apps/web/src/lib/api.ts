@@ -558,4 +558,19 @@ export const api = {
     remove: (id: string) =>
       request<void>(`/api/v1/recurring/${id}`, { method: "DELETE" }),
   },
+  server: {
+    getConfig: () => request<{ port: number; host: string }>("/api/v1/server/config"),
+    checkPort: (port: number) =>
+      request<{ port: number; available: boolean; inUseByFinFlow: boolean }>(
+        `/api/v1/server/check-port?port=${port}`
+      ),
+    updateConfig: (input: { port: number; host?: string }) =>
+      request<{ ok: boolean; port: number; host: string; restarting: boolean }>(
+        "/api/v1/server/config",
+        {
+          method: "PUT",
+          body: JSON.stringify(input),
+        }
+      ),
+  },
 };

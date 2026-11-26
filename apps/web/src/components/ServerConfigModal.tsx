@@ -1,8 +1,10 @@
 import { useState } from "react";
 import { CheckCircle2, Globe, Laptop, Loader2, X, XCircle } from "lucide-react";
 import {
+  api,
   getDefaultLocalApiUrl,
   getServerConfig,
+  getStoredSession,
   saveServerConfig,
   testServerHealth,
 } from "../lib/api";
@@ -83,6 +85,31 @@ export function ServerConfigModal({ open, onClose, onSaved }: ServerConfigModalP
           });
           return;
         }
+      } else if (getStoredSession()) {
+        setSaving(true);
+        setTestResult(null);
+        try {
+          const res = await api.server.updateConfig({ port: localPort });
+          if (res.restarting) {
+            const startedAt = Date.now();
+            while (Date.now() - startedAt < 5000) {
+              const health = await testServerHealth(localUrl);
+              if (health.ok) break;
+              await new Promise((r) => setTimeout(r, 200));
+            }
+          }
+        } catch (err) {
+          setSaving(false);
+          setTestResult({
+            ok: false,
+            message:
+              err instanceof Error
+                ? err.message
+                : `Não foi possível iniciar o servidor na porta ${localPort}.`,
+          });
+          return;
+        }
+        setSaving(false);
       }
     }
 
@@ -180,7 +207,7 @@ export function ServerConfigModal({ open, onClose, onSaved }: ServerConfigModalP
               </div>
 
               <div className="rounded-xl bg-zinc-100 p-3 text-xs text-zinc-600 dark:bg-zinc-800/70 dark:text-zinc-300">
-                Usando API local embarcada em:{" "}
+                O servidor local será iniciado/reiniciado automaticamente em:{" "}
                 <code className="font-mono text-emerald-500">{localUrl}</code>
               </div>
             </div>

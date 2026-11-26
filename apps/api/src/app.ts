@@ -26,6 +26,8 @@ import { registerInvestmentRoutes } from "./routes/investments.js";
 import { registerWorkspaceRoutes } from "./routes/workspaces.js";
 import { registerOpenFinanceRoutes } from "./routes/open-finance.js";
 import { registerInsightRoutes } from "./routes/insights.js";
+import { registerServerConfigRoutes } from "./routes/server-config.js";
+import type { ServerRuntimeConfig } from "./lib/server-config.js";
 
 declare module "fastify" {
   interface FastifyInstance {
@@ -48,6 +50,9 @@ export interface BuildAppOptions {
   mode?: string;
   logger?: boolean;
   rateLimitMax?: number;
+  runtimePort?: number;
+  runtimeHost?: string;
+  onPortChange?: (next: ServerRuntimeConfig) => void;
 }
 
 export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyInstance> {
@@ -119,11 +124,15 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     routePrefix: "/docs",
   });
 
+  const runtimePort = options.runtimePort ?? Number(process.env.PORT ?? 3333);
+  const runtimeHost = options.runtimeHost ?? process.env.HOST ?? "0.0.0.0";
+
   app.get("/health", async () => ({
     status: "ok",
     service: "finflow-api",
     version: "0.1.0",
     mode: options.mode ?? process.env.FINFLOW_MODE ?? "local",
+    port: runtimePort,
     timestamp: new Date().toISOString(),
   }));
 
@@ -145,6 +154,12 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   await registerWorkspaceRoutes(app);
   await registerOpenFinanceRoutes(app);
   await registerInsightRoutes(app);
+  await registerServerConfigRoutes(app, {
+    databaseUrl: options.databaseUrl,
+    runtimePort,
+    runtimeHost,
+    onPortChange: options.onPortChange,
+  });
 
   return app;
 }
