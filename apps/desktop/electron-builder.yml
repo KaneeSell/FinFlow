@@ -16,7 +16,7 @@ extraResources:
   - from: build-resources/api
     to: api
 win:
-  icon: build/icon.ico
+  icon: assets/icon.ico
   target:
     - target: nsis
       arch:
@@ -30,7 +30,7 @@ nsis:
 msi:
   oneClick: false
 linux:
-  icon: build/icon.png
+  icon: assets/icon.png
   category: Finance
   target:
     - target: AppImage
