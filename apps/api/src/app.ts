@@ -16,6 +16,11 @@ import { registerDashboardRoutes } from "./routes/dashboard.js";
 import { registerCreditCardRoutes } from "./routes/credit-cards.js";
 import { registerBudgetsGoalsRoutes } from "./routes/budgets-goals.js";
 import { registerIntegrationRoutes } from "./routes/integrations.js";
+import { registerRuleRoutes } from "./routes/rules.js";
+import { registerForecastRoutes } from "./routes/forecast.js";
+import { registerSyncRoutes } from "./routes/sync.js";
+import { registerSecurityRoutes } from "./routes/security.js";
+import { registerWebhookRoutes } from "./routes/webhooks.js";
 
 declare module "fastify" {
   interface FastifyInstance {
@@ -125,6 +130,11 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   await registerCreditCardRoutes(app);
   await registerBudgetsGoalsRoutes(app);
   await registerIntegrationRoutes(app);
+  await registerRuleRoutes(app);
+  await registerForecastRoutes(app);
+  await registerSyncRoutes(app);
+  await registerSecurityRoutes(app);
+  await registerWebhookRoutes(app);
 
   return app;
 }

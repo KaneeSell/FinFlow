@@ -1,5 +1,5 @@
-import { Check, Edit2, Play, Plus, RefreshCw, Trash2 } from "lucide-react";
-import type { RecurringRuleDTO } from "@finflow/shared";
+import { AlertTriangle, Check, Edit2, Play, Plus, RefreshCw, Trash2, TrendingUp } from "lucide-react";
+import type { CashflowForecastDTO, RecurringRuleDTO } from "@finflow/shared";
 import { MoneyText } from "../components/MoneyText";
 
 const FREQ_LABEL: Record<string, string> = {
@@ -12,6 +12,9 @@ const FREQ_LABEL: Record<string, string> = {
 
 interface RecurringPageProps {
   rules: RecurringRuleDTO[];
+  forecast?: CashflowForecastDTO | null;
+  forecastMonths?: 3 | 6 | 12;
+  onForecastMonthsChange?: (m: 3 | 6 | 12) => void;
   privacyMode: boolean;
   onNew: () => void;
   onEdit: (rule: RecurringRuleDTO) => void;
@@ -23,6 +26,9 @@ interface RecurringPageProps {
 
 export function RecurringPage({
   rules,
+  forecast,
+  forecastMonths = 6,
+  onForecastMonthsChange,
   privacyMode,
   onNew,
   onEdit,
@@ -140,6 +146,64 @@ export function RecurringPage({
           ))
         )}
       </div>
+
+      {/* Cashflow Forecast */}
+      {forecast && (
+        <div className="rounded-2xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+            <h2 className="flex items-center gap-2 text-sm font-semibold">
+              <TrendingUp className="h-4 w-4 text-emerald-400" />
+              Projeção de Fluxo de Caixa ({forecast.months} meses)
+            </h2>
+            {onForecastMonthsChange && (
+              <div className="flex gap-1 rounded-xl bg-zinc-100 p-1 dark:bg-zinc-800">
+                {([3, 6, 12] as const).map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => onForecastMonthsChange(m)}
+                    className={`rounded-lg px-2.5 py-1 text-xs font-medium ${
+                      forecastMonths === m
+                        ? "bg-emerald-500 text-zinc-950"
+                        : "text-zinc-500 hover:text-zinc-200"
+                    }`}
+                  >
+                    {m}M
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {forecast.firstNegativeMonth && (
+            <div className="mb-3 flex items-center gap-2 rounded-xl bg-rose-500/15 px-3 py-2 text-xs text-rose-400">
+              <AlertTriangle className="h-4 w-4 shrink-0" />
+              <span>
+                Atenção: saldo projetado fica negativo em{" "}
+                <strong>{forecast.firstNegativeMonth}</strong>.
+              </span>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+            {forecast.timeline.map((item) => (
+              <div
+                key={item.month}
+                className="rounded-xl border border-zinc-100 p-3 text-xs dark:border-zinc-800"
+              >
+                <p className="font-semibold text-zinc-400">{item.month}</p>
+                <p
+                  className={`mt-1 text-sm font-bold ${
+                    item.endingBalanceCents >= 0 ? "text-emerald-400" : "text-rose-400"
+                  }`}
+                >
+                  <MoneyText cents={item.endingBalanceCents} privacyMode={privacyMode} />
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,12 +1,14 @@
 import crypto from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import {
+  applyAutoRules,
   computeInvoiceMonth,
   createTransactionSchema,
   exportTransactionsToCsv,
   importTransactionsSchema,
   splitInstallmentsCents,
   updateTransactionSchema,
+  type RuleMatchType,
 } from "@finflow/shared";
 import { getMonthBounds, parseDateInput } from "../lib/date.js";
 
@@ -242,6 +244,29 @@ export async function registerTransactionRoutes(app: FastifyInstance): Promise<v
       const installments = parsed.data.installments ?? 1;
       const baseDate = parseDateInput(parsed.data.date);
 
+      let resolvedCategoryId = parsed.data.categoryId ?? null;
+      let resolvedTags = parsed.data.tags ?? [];
+      if (!resolvedCategoryId && parsed.data.type !== "TRANSFER") {
+        const activeRules = await app.prisma.autoRule.findMany({
+          where: { userId: request.user.sub, isActive: true },
+        });
+        const match = applyAutoRules(
+          parsed.data.title,
+          activeRules.map((r) => ({
+            matchType: r.matchType as RuleMatchType,
+            pattern: r.pattern,
+            categoryId: r.categoryId,
+            applyTags: JSON.parse(r.applyTags) as string[],
+            isActive: r.isActive,
+            priority: r.priority,
+          }))
+        );
+        if (match.categoryId) {
+          resolvedCategoryId = match.categoryId;
+          resolvedTags = Array.from(new Set([...resolvedTags, ...match.tags]));
+        }
+      }
+
       if (installments > 1 && parsed.data.type !== "TRANSFER") {
         const parts = splitInstallmentsCents(parsed.data.amountCents, installments);
         const groupId = crypto.randomUUID();
@@ -303,14 +328,14 @@ export async function registerTransactionRoutes(app: FastifyInstance): Promise<v
           userId: request.user.sub,
           accountId: parsed.data.accountId,
           destinationAccountId: parsed.data.destinationAccountId ?? null,
-          categoryId: parsed.data.categoryId ?? null,
+          categoryId: resolvedCategoryId,
           title: parsed.data.title,
           type: parsed.data.type,
           amountCents: parsed.data.amountCents,
           date: baseDate,
           status: parsed.data.status,
           notes: parsed.data.notes ?? null,
-          tags: JSON.stringify(parsed.data.tags ?? []),
+          tags: JSON.stringify(resolvedTags),
           invoiceMonth,
           attachmentName: parsed.data.attachmentName ?? null,
           attachmentDataUrl: parsed.data.attachmentDataUrl ?? null,

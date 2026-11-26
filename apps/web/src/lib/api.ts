@@ -1,13 +1,17 @@
 import type {
   AccountDTO,
+  AutoRuleDTO,
   BudgetOverviewDTO,
+  CashflowForecastDTO,
   CategoryDTO,
   ContributeGoalInput,
   CreateAccountInput,
+  CreateAutoRuleInput,
   CreateCategoryInput,
   CreateGoalInput,
   CreateRecurringRuleInput,
   CreateTransactionInput,
+  CreateWebhookInput,
   CreditCardInvoiceDTO,
   DashboardSummaryDTO,
   GoalDTO,
@@ -17,6 +21,7 @@ import type {
   RecurringRuleDTO,
   RegisterInput,
   ServerConnectionConfig,
+  SyncMutationInput,
   TransactionDTO,
   UpdateAccountInput,
   UpdateCategoryInput,
@@ -24,6 +29,7 @@ import type {
   UpdateRecurringRuleInput,
   UpdateTransactionInput,
   UserDTO,
+  WebhookConfigDTO,
 } from "@finflow/shared";
 
 const STORAGE_SERVER_KEY = "finflow:server_config";
@@ -347,6 +353,61 @@ export const api = {
         year: string;
         holidays: Array<{ date: string; name: string; type: string }>;
       }>(`/api/v1/integrations/holidays/${year}`),
+  },
+  rules: {
+    list: () => request<AutoRuleDTO[]>("/api/v1/rules"),
+    create: (input: CreateAutoRuleInput) =>
+      request<AutoRuleDTO>("/api/v1/rules", { method: "POST", body: JSON.stringify(input) }),
+    remove: (id: string) => request<void>(`/api/v1/rules/${id}`, { method: "DELETE" }),
+  },
+  forecast: {
+    get: (months: 3 | 6 | 12 = 6) =>
+      request<CashflowForecastDTO>(`/api/v1/forecast?months=${months}`),
+  },
+  sync: {
+    batch: (mutations: SyncMutationInput[]) =>
+      request<{ applied: number; duplicates: number; syncedAt: string }>("/api/v1/sync/batch", {
+        method: "POST",
+        body: JSON.stringify({ mutations }),
+      }),
+  },
+  security: {
+    status: () => request<{ totpEnabled: boolean; pinEnabled: boolean }>("/api/v1/security/status"),
+    setup2fa: () =>
+      request<{ secret: string; otpauthUrl: string }>("/api/v1/security/2fa/setup", {
+        method: "POST",
+      }),
+    enable2fa: (code: string) =>
+      request<{ totpEnabled: boolean }>("/api/v1/security/2fa/enable", {
+        method: "POST",
+        body: JSON.stringify({ code }),
+      }),
+    disable2fa: () =>
+      request<{ totpEnabled: boolean }>("/api/v1/security/2fa/disable", { method: "POST" }),
+    setPin: (pin: string) =>
+      request<{ pinEnabled: boolean }>("/api/v1/security/pin", {
+        method: "POST",
+        body: JSON.stringify({ pin }),
+      }),
+    exportEncryptedBackup: (passphrase: string) =>
+      request<Record<string, unknown>>("/api/v1/security/backup/export", {
+        method: "POST",
+        body: JSON.stringify({ passphrase }),
+      }),
+  },
+  webhooks: {
+    list: () => request<WebhookConfigDTO[]>("/api/v1/webhooks"),
+    create: (input: CreateWebhookInput) =>
+      request<WebhookConfigDTO>("/api/v1/webhooks", {
+        method: "POST",
+        body: JSON.stringify(input),
+      }),
+    test: (id: string) =>
+      request<{ delivered: boolean; status?: number; error?: string }>(
+        `/api/v1/webhooks/${id}/test`,
+        { method: "POST" }
+      ),
+    remove: (id: string) => request<void>(`/api/v1/webhooks/${id}`, { method: "DELETE" }),
   },
   recurring: {
     list: () => request<RecurringRuleDTO[]>("/api/v1/recurring"),

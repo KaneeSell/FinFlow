@@ -15,13 +15,16 @@ import {
 } from "lucide-react";
 import type {
   AccountDTO,
+  AutoRuleDTO,
   BudgetOverviewDTO,
+  CashflowForecastDTO,
   CategoryDTO,
   CreditCardInvoiceDTO,
   DashboardSummaryDTO,
   GoalDTO,
   RecurringRuleDTO,
   TransactionDTO,
+  WebhookConfigDTO,
 } from "@finflow/shared";
 import { CommandPalette, type AppPage } from "./components/CommandPalette";
 import { RecurringModal } from "./components/RecurringModal";
@@ -67,6 +70,10 @@ export function App() {
   const [cardInvoices, setCardInvoices] = useState<CreditCardInvoiceDTO[]>([]);
   const [budgets, setBudgets] = useState<BudgetOverviewDTO[]>([]);
   const [goals, setGoals] = useState<GoalDTO[]>([]);
+  const [autoRules, setAutoRules] = useState<AutoRuleDTO[]>([]);
+  const [forecast, setForecast] = useState<CashflowForecastDTO | null>(null);
+  const [forecastMonths, setForecastMonths] = useState<3 | 6 | 12>(6);
+  const [webhooks, setWebhooks] = useState<WebhookConfigDTO[]>([]);
   const [rates, setRates] = useState<{ usdBrl: number; eurBrl: number; btcBrl: number } | null>(null);
   const [bcb, setBcb] = useState<{ selicPercent: number; ipcaPercent12m: number } | null>(null);
   const [holidays, setHolidays] = useState<Array<{ date: string; name: string }>>([]);
@@ -89,7 +96,7 @@ export function App() {
     if (!session) return;
     setLoading(true);
     try {
-      const [sum, accs, cats, txs, recs, invs, bgs, gls] = await Promise.all([
+      const [sum, accs, cats, txs, recs, invs, bgs, gls, rls, fc, whs] = await Promise.all([
         api.dashboard.summary(month),
         api.accounts.list(),
         api.categories.list(),
@@ -102,6 +109,9 @@ export function App() {
         api.creditCards.invoices(month),
         api.budgets.list(month),
         api.goals.list(),
+        api.rules.list(),
+        api.forecast.get(forecastMonths),
+        api.webhooks.list(),
       ]);
       setSummary(sum);
       setAccounts(accs);
@@ -111,12 +121,15 @@ export function App() {
       setCardInvoices(invs);
       setBudgets(bgs);
       setGoals(gls);
+      setAutoRules(rls);
+      setForecast(fc);
+      setWebhooks(whs);
     } catch {
       // handled by auth/401 or UI
     } finally {
       setLoading(false);
     }
-  }, [session, month, txSearch, txTypeFilter]);
+  }, [session, month, txSearch, txTypeFilter, forecastMonths]);
 
   useEffect(() => {
     void loadAllData();
@@ -403,6 +416,9 @@ export function App() {
         {page === "recurring" && (
           <RecurringPage
             rules={recurringRules}
+            forecast={forecast}
+            forecastMonths={forecastMonths}
+            onForecastMonthsChange={setForecastMonths}
             privacyMode={privacyMode}
             onNew={() => {
               setEditingRec(null);
@@ -440,18 +456,24 @@ export function App() {
         )}
 
         {page === "categories" && (
-          <CategoriesPage categories={categories} onRefresh={() => void loadAllData()} />
+          <CategoriesPage
+            categories={categories}
+            rules={autoRules}
+            onRefresh={() => void loadAllData()}
+          />
         )}
 
         {page === "settings" && (
           <SettingsPage
             user={session.user}
+            webhooks={webhooks}
             darkMode={darkMode}
             onToggleTheme={() => setDarkMode((d) => !d)}
             privacyMode={privacyMode}
             onTogglePrivacy={() => setPrivacyMode((p) => !p)}
             onOpenShortcuts={() => setShortcutsOpen(true)}
             onLogout={handleLogout}
+            onRefresh={() => void loadAllData()}
           />
         )}
       </main>
