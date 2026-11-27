@@ -6,8 +6,10 @@ import rateLimit from "@fastify/rate-limit";
 import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
 import type { PrismaClient } from "@prisma/client";
+import type { ServerAdminConfig } from "@finflow/shared";
 import { ensureDatabaseSchema } from "./lib/db-bootstrap.js";
 import { createPrismaClient } from "./lib/prisma.js";
+import { loadServerConfig } from "./lib/server-config.js";
 import { registerAuthRoutes } from "./routes/auth.js";
 import { registerAccountRoutes } from "./routes/accounts.js";
 import { registerCategoryRoutes } from "./routes/categories.js";
@@ -27,11 +29,11 @@ import { registerWorkspaceRoutes } from "./routes/workspaces.js";
 import { registerOpenFinanceRoutes } from "./routes/open-finance.js";
 import { registerInsightRoutes } from "./routes/insights.js";
 import { registerServerConfigRoutes } from "./routes/server-config.js";
-import type { ServerRuntimeConfig } from "./lib/server-config.js";
 
 declare module "fastify" {
   interface FastifyInstance {
     prisma: PrismaClient;
+    serverConfig: ServerAdminConfig;
     authenticate: (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
   }
 }
@@ -52,13 +54,25 @@ export interface BuildAppOptions {
   rateLimitMax?: number;
   runtimePort?: number;
   runtimeHost?: string;
-  onPortChange?: (next: ServerRuntimeConfig) => void;
+  serverConfig?: ServerAdminConfig;
+  onPortChange?: (next: ServerAdminConfig) => void;
 }
 
 export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyInstance> {
+  const loadedConfig = options.serverConfig ?? loadServerConfig(options.databaseUrl);
+  const serverConfig: ServerAdminConfig = {
+    ...loadedConfig,
+    port: options.runtimePort ?? loadedConfig.port,
+    host: options.runtimeHost ?? loadedConfig.host,
+    corsOrigin: options.corsOrigin ?? loadedConfig.corsOrigin,
+    rateLimitMax: options.rateLimitMax ?? loadedConfig.rateLimitMax,
+  };
+
   const app = Fastify({
-    logger: options.logger ?? false,
+    logger: options.logger ? { level: serverConfig.logLevel } : false,
   });
+
+  app.decorate("serverConfig", serverConfig);
 
   const prisma = createPrismaClient(options.databaseUrl ?? process.env.DATABASE_URL);
   await ensureDatabaseSchema(prisma);
@@ -72,14 +86,14 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     contentSecurityPolicy: false,
   });
 
-  const corsOrigin = options.corsOrigin ?? process.env.CORS_ORIGIN ?? "*";
+  const corsOrigin = serverConfig.corsOrigin;
   await app.register(cors, {
     origin: corsOrigin === "*" ? true : corsOrigin.split(",").map((s) => s.trim()),
     credentials: true,
   });
 
   await app.register(rateLimit, {
-    max: options.rateLimitMax ?? 300,
+    max: serverConfig.rateLimitMax,
     timeWindow: "1 minute",
   });
 
@@ -101,31 +115,33 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     }
   });
 
-  await app.register(swagger, {
-    openapi: {
-      info: {
-        title: "FinFlow API",
-        description: "API de finanças pessoais multiplataforma (Local-first ou Servidor Remoto)",
-        version: "0.1.0",
-      },
-      components: {
-        securitySchemes: {
-          bearerAuth: {
-            type: "http",
-            scheme: "bearer",
-            bearerFormat: "JWT",
+  if (serverConfig.enableSwagger) {
+    await app.register(swagger, {
+      openapi: {
+        info: {
+          title: "FinFlow API",
+          description: "API de finanças pessoais multiplataforma (Local-first ou Servidor Remoto)",
+          version: "0.1.0",
+        },
+        components: {
+          securitySchemes: {
+            bearerAuth: {
+              type: "http",
+              scheme: "bearer",
+              bearerFormat: "JWT",
+            },
           },
         },
       },
-    },
-  });
+    });
 
-  await app.register(swaggerUi, {
-    routePrefix: "/docs",
-  });
+    await app.register(swaggerUi, {
+      routePrefix: "/docs",
+    });
+  }
 
-  const runtimePort = options.runtimePort ?? Number(process.env.PORT ?? 3333);
-  const runtimeHost = options.runtimeHost ?? process.env.HOST ?? "0.0.0.0";
+  const runtimePort = serverConfig.port;
+  const runtimeHost = serverConfig.host;
 
   app.get("/health", async () => ({
     status: "ok",
@@ -156,8 +172,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   await registerInsightRoutes(app);
   await registerServerConfigRoutes(app, {
     databaseUrl: options.databaseUrl,
-    runtimePort,
-    runtimeHost,
+    mode: options.mode ?? process.env.FINFLOW_MODE ?? "local",
     onPortChange: options.onPortChange,
   });
 

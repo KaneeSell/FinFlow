@@ -1,21 +1,23 @@
+import fs from "node:fs";
 import type { FastifyInstance } from "fastify";
-import { z } from "zod";
+import {
+  updateServerAdminConfigSchema,
+  type ServerAdminConfig,
+  type ServerStatusDTO,
+} from "@finflow/shared";
 import {
   checkPortAvailable,
+  createServerBackup,
+  getLanUrls,
+  listServerBackups,
+  resolveDbFilePath,
   saveServerConfig,
-  type ServerRuntimeConfig,
 } from "../lib/server-config.js";
-
-const updateServerConfigSchema = z.object({
-  port: z.number().int().min(1024, "Porta mínima é 1024").max(65535, "Porta máxima é 65535"),
-  host: z.string().trim().min(1).optional(),
-});
 
 export interface ServerConfigRouteOptions {
   databaseUrl?: string;
-  runtimePort: number;
-  runtimeHost: string;
-  onPortChange?: (next: ServerRuntimeConfig) => void;
+  mode?: string;
+  onPortChange?: (next: ServerAdminConfig) => void;
 }
 
 export async function registerServerConfigRoutes(
@@ -25,10 +27,56 @@ export async function registerServerConfigRoutes(
   app.get(
     "/api/v1/server/config",
     { preHandler: [app.authenticate] },
-    async () => ({
-      port: options.runtimePort,
-      host: options.runtimeHost,
-    })
+    async () => app.serverConfig
+  );
+
+  app.get(
+    "/api/v1/server/status",
+    { preHandler: [app.authenticate] },
+    async (): Promise<ServerStatusDTO> => {
+      const dbFile = resolveDbFilePath(options.databaseUrl);
+      const dbSizeBytes = dbFile && fs.existsSync(dbFile) ? fs.statSync(dbFile).size : 0;
+      const mem = process.memoryUsage();
+      const now = new Date();
+
+      const [users, accounts, categories, transactions, recurringRules, activeSessions] =
+        await Promise.all([
+          app.prisma.user.count(),
+          app.prisma.account.count(),
+          app.prisma.category.count(),
+          app.prisma.transaction.count(),
+          app.prisma.recurringRule.count(),
+          app.prisma.refreshToken.count({
+            where: { revokedAt: null, expiresAt: { gt: now } },
+          }),
+        ]);
+
+      return {
+        status: "ok",
+        mode: options.mode ?? process.env.FINFLOW_MODE ?? "local",
+        version: "0.1.0",
+        nodeVersion: process.version,
+        platform: `${process.platform} (${process.arch})`,
+        pid: process.pid,
+        uptimeSeconds: Math.floor(process.uptime()),
+        memoryRssMb: Math.round((mem.rss / 1024 / 1024) * 10) / 10,
+        memoryHeapMb: Math.round((mem.heapUsed / 1024 / 1024) * 10) / 10,
+        port: app.serverConfig.port,
+        host: app.serverConfig.host,
+        lanUrls: getLanUrls(app.serverConfig.port),
+        dbPath: dbFile ?? ":memory:",
+        dbSizeBytes,
+        counts: {
+          users,
+          accounts,
+          categories,
+          transactions,
+          recurringRules,
+          activeSessions,
+        },
+        backups: listServerBackups(dbFile),
+      };
+    }
   );
 
   app.get(
@@ -44,11 +92,11 @@ export async function registerServerConfigRoutes(
         });
       }
 
-      if (port === options.runtimePort) {
+      if (port === app.serverConfig.port) {
         return { port, available: true, inUseByFinFlow: true };
       }
 
-      const available = await checkPortAvailable(port, options.runtimeHost);
+      const available = await checkPortAvailable(port, app.serverConfig.host);
       return { port, available, inUseByFinFlow: false };
     }
   );
@@ -57,7 +105,7 @@ export async function registerServerConfigRoutes(
     "/api/v1/server/config",
     { preHandler: [app.authenticate] },
     async (request, reply) => {
-      const parsed = updateServerConfigSchema.safeParse(request.body);
+      const parsed = updateServerAdminConfigSchema.safeParse(request.body);
       if (!parsed.success) {
         return reply.status(400).send({
           error: "ValidationError",
@@ -65,34 +113,107 @@ export async function registerServerConfigRoutes(
         });
       }
 
-      const nextPort = parsed.data.port;
-      const nextHost = parsed.data.host ?? options.runtimeHost;
+      const prev = app.serverConfig;
+      const nextConfig: ServerAdminConfig = {
+        ...prev,
+        ...parsed.data,
+      };
 
-      if (nextPort !== options.runtimePort) {
-        const available = await checkPortAvailable(nextPort, nextHost);
+      if (nextConfig.port !== prev.port) {
+        const available = await checkPortAvailable(nextConfig.port, nextConfig.host);
         if (!available) {
           return reply.status(409).send({
             error: "Conflict",
-            message: `A porta ${nextPort} já está em uso por outro aplicativo.`,
+            message: `A porta ${nextConfig.port} já está em uso por outro aplicativo.`,
           });
         }
       }
 
-      saveServerConfig({ port: nextPort, host: nextHost }, options.databaseUrl);
+      saveServerConfig(nextConfig, options.databaseUrl);
+      app.serverConfig = nextConfig;
 
-      const restarting = nextPort !== options.runtimePort && Boolean(options.onPortChange);
+      const needsRebind =
+        nextConfig.port !== prev.port ||
+        nextConfig.host !== prev.host ||
+        nextConfig.corsOrigin !== prev.corsOrigin ||
+        nextConfig.rateLimitMax !== prev.rateLimitMax ||
+        nextConfig.enableSwagger !== prev.enableSwagger;
+
+      const restarting = needsRebind && Boolean(options.onPortChange);
       if (restarting && options.onPortChange) {
         setTimeout(() => {
-          options.onPortChange?.({ port: nextPort, host: nextHost });
+          options.onPortChange?.(nextConfig);
         }, 150);
       }
 
       return reply.send({
         ok: true,
-        port: nextPort,
-        host: nextHost,
+        ...nextConfig,
         restarting,
       });
+    }
+  );
+
+  app.post(
+    "/api/v1/server/maintenance/vacuum",
+    { preHandler: [app.authenticate] },
+    async () => {
+      const dbFile = resolveDbFilePath(options.databaseUrl);
+      const beforeBytes = dbFile && fs.existsSync(dbFile) ? fs.statSync(dbFile).size : 0;
+
+      await app.prisma.$queryRawUnsafe("PRAGMA wal_checkpoint(TRUNCATE);");
+      await app.prisma.$executeRawUnsafe("VACUUM;");
+
+      const afterBytes = dbFile && fs.existsSync(dbFile) ? fs.statSync(dbFile).size : 0;
+      return { ok: true, beforeBytes, afterBytes };
+    }
+  );
+
+  app.post(
+    "/api/v1/server/backup",
+    { preHandler: [app.authenticate] },
+    async (_request, reply) => {
+      const dbFile = resolveDbFilePath(options.databaseUrl);
+      await app.prisma.$queryRawUnsafe("PRAGMA wal_checkpoint(PASSIVE);");
+      const backup = createServerBackup(dbFile, app.serverConfig.autoBackupRetention);
+      if (!backup) {
+        return reply.status(400).send({
+          error: "BackupUnavailable",
+          message: "Backup em arquivo disponível apenas para bancos SQLite em disco.",
+        });
+      }
+      return {
+        ok: true,
+        backup,
+        backups: listServerBackups(dbFile),
+      };
+    }
+  );
+
+  app.post(
+    "/api/v1/server/sessions/revoke-expired",
+    { preHandler: [app.authenticate] },
+    async () => {
+      const result = await app.prisma.refreshToken.deleteMany({
+        where: {
+          OR: [{ expiresAt: { lt: new Date() } }, { revokedAt: { not: null } }],
+        },
+      });
+      return { ok: true, deleted: result.count };
+    }
+  );
+
+  app.post(
+    "/api/v1/server/restart",
+    { preHandler: [app.authenticate] },
+    async () => {
+      const restarting = Boolean(options.onPortChange);
+      if (restarting && options.onPortChange) {
+        setTimeout(() => {
+          options.onPortChange?.(app.serverConfig);
+        }, 150);
+      }
+      return { ok: true, restarting };
     }
   );
 }

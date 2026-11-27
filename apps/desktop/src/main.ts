@@ -7,12 +7,14 @@ import { registerDesktopUpdater } from "./updater";
 
 interface DesktopConfig {
   localPort?: number;
+  host?: string;
 }
 
 let apiProcess: ChildProcess | null = null;
 let mainWindow: BrowserWindow | null = null;
 let disposeUpdater: (() => void) | null = null;
 let activeLocalPort = Number(process.env.FINFLOW_LOCAL_PORT ?? "3333");
+let activeHost = process.env.FINFLOW_LOCAL_HOST ?? "127.0.0.1";
 
 function getDesktopConfigPath(): string {
   return path.join(app.getPath("userData"), "desktop-config.json");
@@ -22,14 +24,19 @@ function readDesktopConfig(): DesktopConfig {
   try {
     const raw = fs.readFileSync(getDesktopConfigPath(), "utf8");
     const parsed = JSON.parse(raw) as DesktopConfig;
+    const out: DesktopConfig = {};
     if (
       typeof parsed.localPort === "number" &&
       Number.isInteger(parsed.localPort) &&
       parsed.localPort >= 1024 &&
       parsed.localPort <= 65535
     ) {
-      return { localPort: parsed.localPort };
+      out.localPort = parsed.localPort;
     }
+    if (typeof parsed.host === "string" && parsed.host.trim().length > 0) {
+      out.host = parsed.host.trim();
+    }
+    return out;
   } catch {
     // Config file may not exist yet
   }
@@ -59,9 +66,10 @@ function stopLocalApiServer(): void {
   }
 }
 
-function startLocalApiServer(port: number): void {
+function startLocalApiServer(port: number, host = activeHost): void {
   const userDataDir = app.getPath("userData");
   const dbPath = path.join(userDataDir, "finflow.db").replace(/\\/g, "/");
+  const serverConfigPath = path.join(userDataDir, "server-config.json");
 
   const apiEntry = app.isPackaged
     ? path.join(process.resourcesPath, "api", "dist", "server.js")
@@ -73,9 +81,10 @@ function startLocalApiServer(port: number): void {
     env: {
       ...process.env,
       PORT: String(port),
-      HOST: "127.0.0.1",
+      HOST: host,
       FINFLOW_MODE: "local",
       FINFLOW_MANAGED_PORT: "true",
+      FINFLOW_SERVER_CONFIG_PATH: serverConfigPath,
       DATABASE_URL: `file:${dbPath}`,
     },
     stdio: "inherit",
@@ -111,36 +120,48 @@ function registerServerIpc(): void {
     return { available, inUseByFinFlow: false };
   });
 
-  ipcMain.handle("finflow:server:set-port", async (_event, port: number) => {
+  const applyNetwork = async (port: number, host: string) => {
     if (!Number.isInteger(port) || port < 1024 || port > 65535) {
       return { ok: false, error: "Porta inválida. Escolha um número entre 1024 e 65535." };
     }
+    const cleanHost = host.trim() || activeHost;
 
-    if (port === activeLocalPort) {
-      writeDesktopConfig({ localPort: port });
-      return { ok: true, port, apiUrl: `http://127.0.0.1:${port}` };
+    if (port === activeLocalPort && cleanHost === activeHost) {
+      writeDesktopConfig({ localPort: port, host: cleanHost });
+      return { ok: true, port, host: cleanHost, apiUrl: `http://127.0.0.1:${port}` };
     }
 
-    const available = await checkPortAvailable(port);
-    if (!available) {
-      return { ok: false, error: `A porta ${port} já está em uso por outro aplicativo.` };
+    if (port !== activeLocalPort) {
+      const available = await checkPortAvailable(port);
+      if (!available) {
+        return { ok: false, error: `A porta ${port} já está em uso por outro aplicativo.` };
+      }
     }
 
     stopLocalApiServer();
-    startLocalApiServer(port);
+    startLocalApiServer(port, cleanHost);
     const healthy = await waitForLocalApi(port);
     if (!healthy) {
       stopLocalApiServer();
-      startLocalApiServer(activeLocalPort);
+      startLocalApiServer(activeLocalPort, activeHost);
       await waitForLocalApi(activeLocalPort);
-      return { ok: false, error: `Não foi possível iniciar o servidor na porta ${port}.` };
+      return { ok: false, error: `Não foi possível iniciar o servidor em ${cleanHost}:${port}.` };
     }
 
     activeLocalPort = port;
+    activeHost = cleanHost;
     process.env.FINFLOW_LOCAL_API_URL = `http://127.0.0.1:${port}`;
-    writeDesktopConfig({ localPort: port });
-    return { ok: true, port, apiUrl: `http://127.0.0.1:${port}` };
-  });
+    writeDesktopConfig({ localPort: port, host: cleanHost });
+    return { ok: true, port, host: cleanHost, apiUrl: `http://127.0.0.1:${port}` };
+  };
+
+  ipcMain.handle("finflow:server:set-port", async (_event, port: number) =>
+    applyNetwork(port, activeHost)
+  );
+
+  ipcMain.handle("finflow:server:set-network", async (_event, port: number, host: string) =>
+    applyNetwork(port, host)
+  );
 }
 
 function createWindow(): void {
@@ -180,11 +201,14 @@ void app.whenReady().then(async () => {
   if (saved.localPort) {
     activeLocalPort = saved.localPort;
   }
+  if (saved.host) {
+    activeHost = saved.host;
+  }
 
   registerServerIpc();
 
   if (process.env.FINFLOW_SKIP_LOCAL_API !== "true") {
-    startLocalApiServer(activeLocalPort);
+    startLocalApiServer(activeLocalPort, activeHost);
     await waitForLocalApi(activeLocalPort);
   }
   createWindow();

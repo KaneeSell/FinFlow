@@ -27,7 +27,9 @@ import type {
   PayInvoiceInput,
   RecurringRuleDTO,
   RegisterInput,
+  ServerAdminConfig,
   ServerConnectionConfig,
+  ServerStatusDTO,
   SharedExpenseDTO,
   SyncMutationInput,
   TransactionDTO,
@@ -36,6 +38,7 @@ import type {
   UpdateGoalInput,
   UpdateInvestmentInput,
   UpdateRecurringRuleInput,
+  UpdateServerAdminConfigInput,
   UpdateTransactionInput,
   UserDTO,
   WebhookConfigDTO,
@@ -51,6 +54,10 @@ export interface DesktopServerBridge {
   getPort: () => Promise<number>;
   checkPort: (port: number) => Promise<{ available: boolean; inUseByFinFlow: boolean }>;
   setPort: (port: number) => Promise<{ ok: boolean; port?: number; apiUrl?: string; error?: string }>;
+  setNetwork?: (
+    port: number,
+    host: string
+  ) => Promise<{ ok: boolean; port?: number; host?: string; apiUrl?: string; error?: string }>;
 }
 
 declare global {
@@ -559,18 +566,35 @@ export const api = {
       request<void>(`/api/v1/recurring/${id}`, { method: "DELETE" }),
   },
   server: {
-    getConfig: () => request<{ port: number; host: string }>("/api/v1/server/config"),
+    getStatus: () => request<ServerStatusDTO>("/api/v1/server/status"),
+    getConfig: () => request<ServerAdminConfig>("/api/v1/server/config"),
     checkPort: (port: number) =>
       request<{ port: number; available: boolean; inUseByFinFlow: boolean }>(
         `/api/v1/server/check-port?port=${port}`
       ),
-    updateConfig: (input: { port: number; host?: string }) =>
-      request<{ ok: boolean; port: number; host: string; restarting: boolean }>(
-        "/api/v1/server/config",
-        {
-          method: "PUT",
-          body: JSON.stringify(input),
-        }
+    updateConfig: (input: UpdateServerAdminConfigInput) =>
+      request<ServerAdminConfig & { ok: boolean; restarting: boolean }>("/api/v1/server/config", {
+        method: "PUT",
+        body: JSON.stringify(input),
+      }),
+    vacuum: () =>
+      request<{ ok: boolean; beforeBytes: number; afterBytes: number }>(
+        "/api/v1/server/maintenance/vacuum",
+        { method: "POST" }
       ),
+    createBackup: () =>
+      request<{
+        ok: boolean;
+        backup: { name: string; sizeBytes: number; createdAt: string };
+        backups: Array<{ name: string; sizeBytes: number; createdAt: string }>;
+      }>("/api/v1/server/backup", { method: "POST" }),
+    revokeExpiredSessions: () =>
+      request<{ ok: boolean; deleted: number }>("/api/v1/server/sessions/revoke-expired", {
+        method: "POST",
+      }),
+    restart: () =>
+      request<{ ok: boolean; restarting: boolean }>("/api/v1/server/restart", {
+        method: "POST",
+      }),
   },
 };

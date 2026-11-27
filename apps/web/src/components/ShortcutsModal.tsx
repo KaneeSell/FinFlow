@@ -17,6 +17,7 @@ const SHORTCUTS = [
   { keys: "G depois W", desc: "Ir para Espaços & Open Finance" },
   { keys: "G depois A", desc: "Ir para Contas" },
   { keys: "G depois C", desc: "Ir para Categorias" },
+  { keys: "G depois V", desc: "Ir para Painel do Servidor" },
   { keys: "G depois S", desc: "Ir para Configurações" },
   { keys: "P", desc: "Ativar/desativar Modo Privacidade" },
   { keys: "?", desc: "Abrir esta ajuda" },

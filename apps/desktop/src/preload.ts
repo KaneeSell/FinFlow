@@ -8,6 +8,8 @@ contextBridge.exposeInMainWorld("finflowDesktop", {
     getPort: () => ipcRenderer.invoke("finflow:server:get-port"),
     checkPort: (port: number) => ipcRenderer.invoke("finflow:server:check-port", port),
     setPort: (port: number) => ipcRenderer.invoke("finflow:server:set-port", port),
+    setNetwork: (port: number, host: string) =>
+      ipcRenderer.invoke("finflow:server:set-network", port, host),
   },
   updates: {
     checkForUpdates: () => ipcRenderer.invoke("finflow:updates:check"),

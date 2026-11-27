@@ -61,7 +61,7 @@ describe("Server Config & Live Port Switching API", () => {
       headers: { authorization: `Bearer ${accessToken}` },
     });
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ port: 3333, host: "127.0.0.1" });
+    expect(res.json()).toMatchObject({ port: 3333, host: "127.0.0.1" });
   });
 
   it("rejects invalid port and busy port (409)", async () => {
@@ -114,6 +114,65 @@ describe("Server Config & Live Port Switching API", () => {
     expect(saved.port).toBe(freePort);
 
     await new Promise((r) => setTimeout(r, 200));
-    expect(onPortChange).toHaveBeenCalledWith({ port: freePort, host: "127.0.0.1" });
+    expect(onPortChange).toHaveBeenCalledWith(
+      expect.objectContaining({ port: freePort, host: "127.0.0.1" })
+    );
+  });
+
+  it("returns server telemetry status, toggles allowRegistration, and runs vacuum/backup/sessions", async () => {
+    const statusRes = await app.inject({
+      method: "GET",
+      url: "/api/v1/server/status",
+      headers: { authorization: `Bearer ${accessToken}` },
+    });
+    expect(statusRes.statusCode).toBe(200);
+    const statusBody = statusRes.json();
+    expect(statusBody.status).toBe("ok");
+    expect(statusBody.port).toBeGreaterThanOrEqual(1024);
+    expect(statusBody.counts.users).toBeGreaterThanOrEqual(1);
+
+    const disableRegRes = await app.inject({
+      method: "PUT",
+      url: "/api/v1/server/config",
+      headers: { authorization: `Bearer ${accessToken}` },
+      payload: { allowRegistration: false },
+    });
+    expect(disableRegRes.statusCode).toBe(200);
+    expect(disableRegRes.json().allowRegistration).toBe(false);
+
+    const blockedRegRes = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/register",
+      payload: {
+        name: "Blocked User",
+        email: "blocked@finflow.dev",
+        password: "Password123",
+      },
+    });
+    expect(blockedRegRes.statusCode).toBe(403);
+
+    const vacuumRes = await app.inject({
+      method: "POST",
+      url: "/api/v1/server/maintenance/vacuum",
+      headers: { authorization: `Bearer ${accessToken}` },
+    });
+    expect(vacuumRes.statusCode).toBe(200);
+    expect(vacuumRes.json().ok).toBe(true);
+
+    const backupRes = await app.inject({
+      method: "POST",
+      url: "/api/v1/server/backup",
+      headers: { authorization: `Bearer ${accessToken}` },
+    });
+    expect(backupRes.statusCode).toBe(200);
+    expect(backupRes.json().backup.name).toContain("finflow-backup-");
+
+    const sessionsRes = await app.inject({
+      method: "POST",
+      url: "/api/v1/server/sessions/revoke-expired",
+      headers: { authorization: `Bearer ${accessToken}` },
+    });
+    expect(sessionsRes.statusCode).toBe(200);
+    expect(typeof sessionsRes.json().deleted).toBe("number");
   });
 });

@@ -1,43 +1,39 @@
 import type { FastifyInstance } from "fastify";
+import type { ServerAdminConfig } from "@finflow/shared";
 import { buildApp } from "./app.js";
 import { loadServerConfig } from "./lib/server-config.js";
 
 let currentApp: FastifyInstance | null = null;
-let currentPort = 3333;
-let currentHost = "0.0.0.0";
+let currentConfig: ServerAdminConfig = loadServerConfig();
 
-async function boot(port: number, host: string): Promise<void> {
+async function boot(config: ServerAdminConfig): Promise<void> {
   const app = await buildApp({
     logger: process.env.NODE_ENV !== "test",
-    runtimePort: port,
-    runtimeHost: host,
+    serverConfig: config,
     onPortChange: async (next) => {
-      const prevPort = currentPort;
-      const prevHost = currentHost;
+      const prev = currentConfig;
       try {
         if (currentApp) {
           await currentApp.close();
           currentApp = null;
         }
-        await boot(next.port, next.host);
+        await boot(next);
       } catch (err) {
         console.error(`Failed to rebind FinFlow API to ${next.host}:${next.port}:`, err);
-        await boot(prevPort, prevHost);
+        await boot(prev);
       }
     },
   });
 
-  await app.listen({ port, host });
+  await app.listen({ port: config.port, host: config.host });
   currentApp = app;
-  currentPort = port;
-  currentHost = host;
-  console.log(`FinFlow API running at http://${host}:${port}`);
+  currentConfig = config;
+  console.log(`FinFlow API running at http://${config.host}:${config.port}`);
 }
 
 async function start(): Promise<void> {
-  const config = loadServerConfig();
   try {
-    await boot(config.port, config.host);
+    await boot(loadServerConfig());
   } catch (err) {
     console.error("Failed to start FinFlow API:", err);
     process.exit(1);

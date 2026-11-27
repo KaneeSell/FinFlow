@@ -10,6 +10,7 @@ import {
   Plus,
   Repeat,
   Search,
+  ServerCog,
   Settings,
   Tag,
   Target,
@@ -27,6 +28,7 @@ export type AppPage =
   | "workspaces"
   | "accounts"
   | "categories"
+  | "server"
   | "settings";
 
 interface CommandItem {
@@ -130,6 +132,13 @@ export function CommandPalette({
       hint: "G C",
       icon: <Tag className="h-4 w-4" />,
       action: () => onNavigate("categories"),
+    },
+    {
+      id: "nav-server",
+      label: "Ir para Painel do Servidor",
+      hint: "G V",
+      icon: <ServerCog className="h-4 w-4" />,
+      action: () => onNavigate("server"),
     },
     {
       id: "nav-settings",

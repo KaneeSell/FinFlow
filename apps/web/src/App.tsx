@@ -9,6 +9,7 @@ import {
   LayoutDashboard,
   Plus,
   Repeat,
+  ServerCog,
   Settings,
   Tag,
   Target,
@@ -55,6 +56,7 @@ import { CreditCardsPage } from "./pages/CreditCardsPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { InvestmentsPage } from "./pages/InvestmentsPage";
 import { RecurringPage } from "./pages/RecurringPage";
+import { ServerAdminPage } from "./pages/ServerAdminPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { TransactionsPage } from "./pages/TransactionsPage";
 import { WorkspacesPage } from "./pages/WorkspacesPage";
@@ -69,6 +71,7 @@ const NAV_ITEMS: Array<{ id: AppPage; label: string; shortcut: string; icon: Rea
   { id: "workspaces", label: "Espaços", shortcut: "G W", icon: <Users className="h-4 w-4" /> },
   { id: "accounts", label: "Contas", shortcut: "G A", icon: <Wallet className="h-4 w-4" /> },
   { id: "categories", label: "Categorias", shortcut: "G C", icon: <Tag className="h-4 w-4" /> },
+  { id: "server", label: "Servidor", shortcut: "G V", icon: <ServerCog className="h-4 w-4" /> },
   { id: "settings", label: "Configurações", shortcut: "G S", icon: <Settings className="h-4 w-4" /> },
 ];
 
@@ -303,6 +306,7 @@ export function App() {
           w: "workspaces",
           a: "accounts",
           c: "categories",
+          v: "server",
           s: "settings",
         };
         if (goMap[key]) {
@@ -600,6 +604,8 @@ export function App() {
             onRefresh={() => void loadAllData()}
           />
         )}
+
+        {page === "server" && <ServerAdminPage />}
 
         {page === "settings" && (
           <SettingsPage

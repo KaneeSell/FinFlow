@@ -134,6 +134,61 @@ export const serverConnectionSchema = z.object({
   localPort: z.number().int().min(1024).max(65535).optional(),
 });
 
+export const SERVER_LOG_LEVELS = ["error", "warn", "info", "debug"] as const;
+export type ServerLogLevel = (typeof SERVER_LOG_LEVELS)[number];
+
+export const serverAdminConfigSchema = z.object({
+  port: z.number().int().min(1024, "Porta mínima é 1024").max(65535, "Porta máxima é 65535"),
+  host: z.string().trim().min(1, "Host obrigatório").max(100),
+  publicUrl: z.string().trim().max(255).default(""),
+  corsOrigin: z.string().trim().min(1).max(500).default("*"),
+  rateLimitMax: z.number().int().min(30).max(5000).default(300),
+  allowRegistration: z.boolean().default(true),
+  enableSwagger: z.boolean().default(true),
+  accessTokenTtlMinutes: z.number().int().min(5).max(1440).default(15),
+  refreshTokenTtlDays: z.number().int().min(1).max(90).default(7),
+  logLevel: z.enum(SERVER_LOG_LEVELS).default("info"),
+  autoBackupEnabled: z.boolean().default(true),
+  autoBackupRetention: z.number().int().min(1).max(30).default(7),
+});
+
+export const updateServerAdminConfigSchema = serverAdminConfigSchema.partial();
+
+export type ServerAdminConfig = z.infer<typeof serverAdminConfigSchema>;
+export type UpdateServerAdminConfigInput = z.infer<typeof updateServerAdminConfigSchema>;
+
+export interface ServerBackupInfo {
+  name: string;
+  sizeBytes: number;
+  createdAt: string;
+}
+
+export interface ServerStatusDTO {
+  status: "ok";
+  mode: string;
+  version: string;
+  nodeVersion: string;
+  platform: string;
+  pid: number;
+  uptimeSeconds: number;
+  memoryRssMb: number;
+  memoryHeapMb: number;
+  port: number;
+  host: string;
+  lanUrls: string[];
+  dbPath: string;
+  dbSizeBytes: number;
+  counts: {
+    users: number;
+    accounts: number;
+    categories: number;
+    transactions: number;
+    recurringRules: number;
+    activeSessions: number;
+  };
+  backups: ServerBackupInfo[];
+}
+
 export type RegisterInput = z.infer<typeof registerSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
 export type CreateAccountInput = z.infer<typeof createAccountSchema>;
