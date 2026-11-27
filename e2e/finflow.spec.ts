@@ -33,6 +33,22 @@ test.describe("FinFlow End-to-End Flows", () => {
     await expect(page.getByText("Salário E2E")).toBeVisible();
     await expect(page.getByText(/5\.000,00/).first()).toBeVisible();
 
+    // 3b. Create Expense and Transfer via TransactionModal
+    await page.keyboard.press("n");
+    await expect(page.getByRole("dialog", { name: "Novo Lançamento" })).toBeVisible();
+    await page.getByPlaceholder("Ex: Supermercado, Salário...").fill("Mercado E2E");
+    await page.getByPlaceholder("0,00").fill("250,00");
+    await page.getByRole("button", { name: "Criar Lançamento" }).click();
+    await expect(page.getByText("Mercado E2E")).toBeVisible();
+
+    await page.keyboard.press("n");
+    await expect(page.getByRole("dialog", { name: "Novo Lançamento" })).toBeVisible();
+    await page.getByRole("button", { name: "Transferência" }).click();
+    await page.getByPlaceholder("Ex: Supermercado, Salário...").fill("Reserva E2E");
+    await page.getByPlaceholder("0,00").fill("300,00");
+    await page.getByRole("button", { name: "Criar Lançamento" }).click();
+    await expect(page.getByText("Reserva E2E")).toBeVisible();
+
     // 4. Keyboard First: Ctrl+K Command Palette -> navigate to Recorrentes
     await page.keyboard.press("Control+k");
     await expect(page.getByRole("dialog", { name: "Paleta de Comandos" })).toBeVisible();

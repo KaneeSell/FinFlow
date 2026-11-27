@@ -63,7 +63,7 @@ export function TransactionModal({
       setTitle("");
       setAmountInput("");
       setAccountId(accounts[0]?.id ?? "");
-      setDestinationAccountId(accounts[1]?.id ?? "");
+      setDestinationAccountId(accounts.find((a) => a.id !== accounts[0]?.id)?.id ?? "");
       setCategoryId("");
       setDate(new Date().toISOString().slice(0, 10));
       setStatus("PAID");
@@ -72,7 +72,20 @@ export function TransactionModal({
       setAttachmentName(null);
       setAttachmentDataUrl(null);
     }
-  }, [open, editing, accounts]);
+    // Only reset form when opening or switching the item being edited, not on background account refreshes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, editing]);
+
+  useEffect(() => {
+    if (!open || editing || accounts.length === 0) return;
+    if (!accountId) {
+      setAccountId(accounts[0]!.id);
+    }
+    if (!destinationAccountId) {
+      const other = accounts.find((a) => a.id !== (accountId || accounts[0]!.id));
+      if (other) setDestinationAccountId(other.id);
+    }
+  }, [open, editing, accounts, accountId, destinationAccountId]);
 
   if (!open) return null;
 
@@ -80,9 +93,22 @@ export function TransactionModal({
     (c) => (type === "INCOME" ? c.type === "INCOME" : c.type === "EXPENSE")
   );
 
+  const handleTypeChange = (nextType: TransactionType) => {
+    setType(nextType);
+    setCategoryId("");
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    if (!accountId) {
+      setError("Selecione ou cadastre uma conta antes de criar um lançamento.");
+      return;
+    }
+    if (type === "TRANSFER" && (!destinationAccountId || destinationAccountId === accountId)) {
+      setError("Selecione uma conta de destino diferente da origem.");
+      return;
+    }
     const amountCents = parseCurrencyToCents(amountInput);
     if (amountCents <= 0) {
       setError("Informe um valor maior que zero.");
@@ -101,7 +127,7 @@ export function TransactionModal({
         date,
         status,
         notes: notes.trim() || null,
-        ...(editing ? {} : { installments }),
+        ...(!editing && type !== "TRANSFER" ? { installments } : {}),
         attachmentName,
         attachmentDataUrl,
       };
@@ -156,7 +182,7 @@ export function TransactionModal({
               <button
                 key={opt.value}
                 type="button"
-                onClick={() => setType(opt.value)}
+                onClick={() => handleTypeChange(opt.value)}
                 className={`rounded-lg py-2 text-xs font-semibold transition ${
                   type === opt.value
                     ? opt.value === "INCOME"

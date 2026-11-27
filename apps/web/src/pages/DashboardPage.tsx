@@ -45,7 +45,11 @@ export function DashboardPage({
     e.preventDefault();
     const text = quickInput.trim();
     const defaultAccountId = accounts[0]?.id;
-    if (!text || !defaultAccountId) return;
+    if (!text) return;
+    if (!defaultAccountId) {
+      setQuickFeedback("Cadastre uma conta antes de fazer um lançamento.");
+      return;
+    }
 
     setQuickFeedback(null);
     try {
@@ -85,8 +89,8 @@ export function DashboardPage({
       setQuickInput("");
       setQuickFeedback(`Lançado: ${parsed.title} (R$ ${(parsed.amountCents / 100).toFixed(2)})`);
       onRefresh?.();
-    } catch {
-      setQuickFeedback("Erro ao processar entrada rápida.");
+    } catch (err) {
+      setQuickFeedback(err instanceof Error ? err.message : "Erro ao processar entrada rápida.");
     }
   };
   if (loading && !summary) {

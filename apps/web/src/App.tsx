@@ -40,7 +40,7 @@ import { RecurringModal } from "./components/RecurringModal";
 import { ShortcutsModal } from "./components/ShortcutsModal";
 import { TransactionModal } from "./components/TransactionModal";
 import { UpdateModal } from "./components/UpdateModal";
-import { api, getStoredSession, saveStoredSession, type AuthSession } from "./lib/api";
+import { api, ApiError, getStoredSession, saveStoredSession, type AuthSession } from "./lib/api";
 import {
   checkForAppUpdate,
   getAppVersion,
@@ -132,45 +132,54 @@ export function App() {
     if (!session) return;
     setLoading(true);
     try {
+      const results = await Promise.allSettled([
+        api.dashboard.summary(month),
+        api.accounts.list(),
+        api.categories.list(),
+        api.transactions.list({
+          month,
+          search: txSearch || undefined,
+          type: txTypeFilter || undefined,
+        }),
+        api.recurring.list(),
+        api.creditCards.invoices(month),
+        api.budgets.list(month),
+        api.goals.list(),
+        api.rules.list(),
+        api.forecast.get(forecastMonths),
+        api.webhooks.list(),
+        api.investments.list(),
+        api.investments.netWorth(),
+        api.workspaces.list(),
+        api.openFinance.list(),
+      ]);
+
+      const firstError = results.find(
+        (r): r is PromiseRejectedResult => r.status === "rejected"
+      )?.reason;
+      if (firstError instanceof ApiError && firstError.status === 401) {
+        saveStoredSession(null);
+        setSession(null);
+        return;
+      }
+
       const [sum, accs, cats, txs, recs, invs, bgs, gls, rls, fc, whs, asts, nw, wss, ofc] =
-        await Promise.all([
-          api.dashboard.summary(month),
-          api.accounts.list(),
-          api.categories.list(),
-          api.transactions.list({
-            month,
-            search: txSearch || undefined,
-            type: txTypeFilter || undefined,
-          }),
-          api.recurring.list(),
-          api.creditCards.invoices(month),
-          api.budgets.list(month),
-          api.goals.list(),
-          api.rules.list(),
-          api.forecast.get(forecastMonths),
-          api.webhooks.list(),
-          api.investments.list(),
-          api.investments.netWorth(),
-          api.workspaces.list(),
-          api.openFinance.list(),
-        ]);
-      setSummary(sum);
-      setAccounts(accs);
-      setCategories(cats);
-      setTransactions(txs);
-      setRecurringRules(recs);
-      setCardInvoices(invs);
-      setBudgets(bgs);
-      setGoals(gls);
-      setAutoRules(rls);
-      setForecast(fc);
-      setWebhooks(whs);
-      setAssets(asts);
-      setNetWorth(nw);
-      setWorkspaces(wss);
-      setOpenFinanceConnections(ofc);
-    } catch {
-      // handled by auth/401 or UI
+        results;
+      if (sum.status === "fulfilled") setSummary(sum.value);
+      if (accs.status === "fulfilled") setAccounts(accs.value);
+      if (cats.status === "fulfilled") setCategories(cats.value);
+      if (txs.status === "fulfilled") setTransactions(txs.value);
+      if (recs.status === "fulfilled") setRecurringRules(recs.value);
+      if (invs.status === "fulfilled") setCardInvoices(invs.value);
+      if (bgs.status === "fulfilled") setBudgets(bgs.value);
+      if (gls.status === "fulfilled") setGoals(gls.value);
+      if (rls.status === "fulfilled") setAutoRules(rls.value);
+      if (fc.status === "fulfilled") setForecast(fc.value);
+      if (whs.status === "fulfilled") setWebhooks(whs.value);
+      if (asts.status === "fulfilled") setAssets(asts.value);
+      if (nw.status === "fulfilled") setNetWorth(nw.value);
+      if (wss.status === "fulfilled") setWorkspaces(wss.value);
+      if (ofc.status === "fulfilled") setOpenFinanceConnections(ofc.value);
     } finally {
       setLoading(false);
     }
