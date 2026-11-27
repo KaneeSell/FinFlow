@@ -51,6 +51,21 @@ describe("FinFlow API Integration Tests", () => {
     expect(body.service).toBe("finflow-api");
   });
 
+  it("allows PATCH, PUT, and DELETE in CORS preflight", async () => {
+    for (const method of ["PATCH", "PUT", "DELETE"]) {
+      const res = await app.inject({
+        method: "OPTIONS",
+        url: "/api/v1/accounts/acc-1",
+        headers: {
+          origin: "http://127.0.0.1:4173",
+          "access-control-request-method": method,
+        },
+      });
+      expect(res.statusCode).toBe(204);
+      expect(res.headers["access-control-allow-methods"]).toContain(method);
+    }
+  });
+
   it("blocks protected routes when unauthenticated", async () => {
     const res = await app.inject({ method: "GET", url: "/api/v1/accounts" });
     expect(res.statusCode).toBe(401);

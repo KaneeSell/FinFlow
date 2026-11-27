@@ -89,6 +89,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   const corsOrigin = serverConfig.corsOrigin;
   await app.register(cors, {
     origin: corsOrigin === "*" ? true : corsOrigin.split(",").map((s) => s.trim()),
+    methods: ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
     credentials: true,
   });
 

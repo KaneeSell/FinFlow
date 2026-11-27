@@ -91,6 +91,17 @@ test.describe("FinFlow End-to-End Flows", () => {
     await page.keyboard.press("i");
     await expect(page.getByRole("heading", { name: "Patrimônio & Investimentos" })).toBeVisible();
 
+    // 8b. Accounts: edit Carteira -> Carteira Principal
+    await page.keyboard.press("g");
+    await page.keyboard.press("a");
+    await expect(page.getByRole("heading", { name: "Contas" })).toBeVisible();
+    await page.getByRole("button", { name: "Editar conta" }).nth(1).click();
+    await expect(page.getByRole("dialog", { name: "Editar Conta" })).toBeVisible();
+    await page.getByLabel("Nome da Conta").fill("Carteira Principal");
+    await page.getByLabel("Saldo Inicial (R$)").fill("100,00");
+    await page.getByRole("button", { name: "Salvar Alterações" }).click();
+    await expect(page.getByRole("heading", { name: "Carteira Principal" })).toBeVisible();
+
     // 9. Mobile First viewport check (390x844)
     await page.setViewportSize({ width: 390, height: 844 });
     const mobileNav = page.getByRole("navigation", { name: "Navegação Mobile" });
