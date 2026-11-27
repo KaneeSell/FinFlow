@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { createRecurringRuleSchema, createTransactionSchema } from "./schemas.js";
+import {
+  createAccountSchema,
+  createRecurringRuleSchema,
+  createTransactionSchema,
+} from "./schemas.js";
 
 describe("shared Zod schemas", () => {
   it("rejects transfer to the same account", () => {
@@ -39,5 +43,16 @@ describe("shared Zod schemas", () => {
         startDate: "2026-11-05",
       }).success
     ).toBe(false);
+  });
+
+  it("accepts MEAL_VOUCHER account type", () => {
+    const result = createAccountSchema.safeParse({
+      name: "Alelo VA",
+      type: "MEAL_VOUCHER",
+      initialBalanceCents: 50000,
+      creditLimitCents: 80000,
+      dueDay: 1,
+    });
+    expect(result.success).toBe(true);
   });
 });

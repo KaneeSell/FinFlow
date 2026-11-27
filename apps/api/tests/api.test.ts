@@ -243,4 +243,61 @@ describe("FinFlow API Integration Tests", () => {
     expect(summary.monthlyExpenseCents).toBeGreaterThanOrEqual(120050);
     expect(summary.cashflowHistory).toHaveLength(6);
   });
+
+  it("creates MEAL_VOUCHER account, posts reload and grocery expense, and computes balance", async () => {
+    const accRes = await app.inject({
+      method: "POST",
+      url: "/api/v1/accounts",
+      headers: { authorization: `Bearer ${accessToken}` },
+      payload: {
+        name: "Alelo Alimentação",
+        type: "MEAL_VOUCHER",
+        initialBalanceCents: 10000,
+        creditLimitCents: 80000,
+        dueDay: 1,
+      },
+    });
+    expect(accRes.statusCode).toBe(201);
+    const vaId = accRes.json().id as string;
+
+    const today = new Date().toISOString().slice(0, 10);
+    await app.inject({
+      method: "POST",
+      url: "/api/v1/transactions",
+      headers: { authorization: `Bearer ${accessToken}` },
+      payload: {
+        accountId: vaId,
+        title: "Recarga Alelo",
+        type: "INCOME",
+        amountCents: 80000,
+        date: today,
+        status: "PAID",
+      },
+    });
+
+    await app.inject({
+      method: "POST",
+      url: "/api/v1/transactions",
+      headers: { authorization: `Bearer ${accessToken}` },
+      payload: {
+        accountId: vaId,
+        title: "Supermercado",
+        type: "EXPENSE",
+        amountCents: 25000,
+        date: today,
+        status: "PAID",
+      },
+    });
+
+    const listRes = await app.inject({
+      method: "GET",
+      url: "/api/v1/accounts",
+      headers: { authorization: `Bearer ${accessToken}` },
+    });
+    const va = (listRes.json() as Array<{ id: string; type: string; currentBalanceCents: number }>).find(
+      (a) => a.id === vaId
+    );
+    expect(va?.type).toBe("MEAL_VOUCHER");
+    expect(va?.currentBalanceCents).toBe(65000);
+  });
 });

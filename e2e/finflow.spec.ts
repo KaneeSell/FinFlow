@@ -102,6 +102,14 @@ test.describe("FinFlow End-to-End Flows", () => {
     await page.getByRole("button", { name: "Salvar Alterações" }).click();
     await expect(page.getByRole("heading", { name: "Carteira Principal" })).toBeVisible();
 
+    // 8c. Accounts: create Vale Alimentação (Alelo VA)
+    await page.getByPlaceholder("Nome da conta (ex: Nubank, Alelo VA)").fill("Alelo VA");
+    await page.getByLabel("Tipo da nova conta").selectOption("MEAL_VOUCHER");
+    await page.getByPlaceholder("Saldo inicial (R$)").fill("500,00");
+    await page.getByPlaceholder("Recarga mensal (R$)").fill("800,00");
+    await page.getByRole("button", { name: "Adicionar" }).click();
+    await expect(page.getByRole("heading", { name: "Alelo VA" })).toBeVisible();
+
     // 9. Mobile First viewport check (390x844)
     await page.setViewportSize({ width: 390, height: 844 });
     const mobileNav = page.getByRole("navigation", { name: "Navegação Mobile" });

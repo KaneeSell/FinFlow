@@ -21,7 +21,9 @@ export function CreditCardsPage({
   privacyMode,
   onRefresh,
 }: CreditCardsPageProps) {
-  const payingAccounts = accounts.filter((a) => a.type !== "CREDIT_CARD" && !a.isArchived);
+  const payingAccounts = accounts.filter(
+    (a) => a.type !== "CREDIT_CARD" && a.type !== "MEAL_VOUCHER" && !a.isArchived
+  );
   const [sourceAccountId, setSourceAccountId] = useState(payingAccounts[0]?.id ?? "");
   const [payingId, setPayingId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);

@@ -106,4 +106,81 @@ describe("AccountsPage editing", () => {
       );
     });
   });
+
+  it("creates a MEAL_VOUCHER account with monthly reload and launches quick reload", async () => {
+    const createAccSpy = vi.spyOn(api.accounts, "create").mockResolvedValue({
+      ...ACCOUNTS[0]!,
+      id: "va-1",
+      name: "Alelo VA",
+      type: "MEAL_VOUCHER",
+      creditLimitCents: 80000,
+      dueDay: 5,
+    });
+    const createTxSpy = vi.spyOn(api.transactions, "create").mockResolvedValue({} as never);
+    const onRefresh = vi.fn();
+
+    const { rerender } = render(
+      <AccountsPage accounts={ACCOUNTS} privacyMode={false} onRefresh={onRefresh} />
+    );
+
+    fireEvent.change(screen.getByPlaceholderText("Nome da conta (ex: Nubank, Alelo VA)"), {
+      target: { value: "Alelo VA" },
+    });
+    fireEvent.change(screen.getByLabelText("Tipo da nova conta"), {
+      target: { value: "MEAL_VOUCHER" },
+    });
+    fireEvent.change(screen.getByPlaceholderText("Saldo inicial (R$)"), {
+      target: { value: "500,00" },
+    });
+    fireEvent.change(screen.getByPlaceholderText("Recarga mensal (R$)"), {
+      target: { value: "800,00" },
+    });
+    fireEvent.change(screen.getByPlaceholderText("Dia da recarga"), {
+      target: { value: "5" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Adicionar" }));
+
+    await waitFor(() => {
+      expect(createAccSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: "Alelo VA",
+          type: "MEAL_VOUCHER",
+          initialBalanceCents: 50000,
+          creditLimitCents: 80000,
+          dueDay: 5,
+          icon: "utensils",
+        })
+      );
+    });
+
+    rerender(
+      <AccountsPage
+        accounts={[
+          ...ACCOUNTS,
+          {
+            ...ACCOUNTS[0]!,
+            id: "va-1",
+            name: "Alelo VA",
+            type: "MEAL_VOUCHER",
+            creditLimitCents: 80000,
+            dueDay: 5,
+          },
+        ]}
+        privacyMode={false}
+        onRefresh={onRefresh}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "+ Lançar Recarga" }));
+    await waitFor(() => {
+      expect(createTxSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          accountId: "va-1",
+          title: "Recarga Alelo VA",
+          type: "INCOME",
+          amountCents: 80000,
+        })
+      );
+    });
+  });
 });

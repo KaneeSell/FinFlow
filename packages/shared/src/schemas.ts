@@ -5,6 +5,7 @@ export const ACCOUNT_TYPES = [
   "WALLET",
   "SAVINGS",
   "CREDIT_CARD",
+  "MEAL_VOUCHER",
   "INVESTMENT",
 ] as const;
 export type AccountType = (typeof ACCOUNT_TYPES)[number];

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Archive, Edit2, Plus, Trash2, Wallet, X } from "lucide-react";
+import { Archive, CreditCard, Edit2, Plus, Trash2, Utensils, Wallet, X } from "lucide-react";
 import {
   ACCOUNT_TYPES,
   parseCurrencyToCents,
@@ -14,8 +14,27 @@ const ACCOUNT_TYPE_LABELS: Record<AccountType, string> = {
   WALLET: "Carteira",
   SAVINGS: "Poupança",
   CREDIT_CARD: "Cartão de Crédito",
+  MEAL_VOUCHER: "Vale Alimentação",
   INVESTMENT: "Investimentos",
 };
+
+function defaultIconForType(type: AccountType): string {
+  if (type === "CREDIT_CARD") return "credit-card";
+  if (type === "MEAL_VOUCHER") return "utensils";
+  return "landmark";
+}
+
+function defaultColorForType(type: AccountType): string {
+  if (type === "CREDIT_CARD") return "#8b5cf6";
+  if (type === "MEAL_VOUCHER") return "#f59e0b";
+  return "#10b981";
+}
+
+function AccountIcon({ type }: { type: AccountType }) {
+  if (type === "CREDIT_CARD") return <CreditCard className="h-4 w-4" />;
+  if (type === "MEAL_VOUCHER") return <Utensils className="h-4 w-4" />;
+  return <Wallet className="h-4 w-4" />;
+}
 
 const PRESET_COLORS = [
   "#10b981",
@@ -39,9 +58,11 @@ export function AccountsPage({ accounts, privacyMode, onRefresh }: AccountsPageP
   const [type, setType] = useState<AccountType>("CHECKING");
   const [initialInput, setInitialInput] = useState("");
   const [creditLimitInput, setCreditLimitInput] = useState("");
+  const [reloadAmountInput, setReloadAmountInput] = useState("");
   const [closingDay, setClosingDay] = useState("10");
   const [dueDay, setDueDay] = useState("17");
   const [creating, setCreating] = useState(false);
+  const [reloadingId, setReloadingId] = useState<string | null>(null);
 
   const [editingAccount, setEditingAccount] = useState<AccountDTO | null>(null);
   const [editName, setEditName] = useState("");
@@ -76,9 +97,19 @@ export function AccountsPage({ accounts, privacyMode, onRefresh }: AccountsPageP
       acc.creditLimitCents != null ? (acc.creditLimitCents / 100).toFixed(2).replace(".", ",") : ""
     );
     setEditClosingDay(String(acc.closingDay ?? 10));
-    setEditDueDay(String(acc.dueDay ?? 17));
+    setEditDueDay(String(acc.dueDay ?? (acc.type === "MEAL_VOUCHER" ? 1 : 17)));
     setEditArchived(acc.isArchived);
     setEditError(null);
+  };
+
+  const handleTypeChange = (nextType: AccountType) => {
+    setType(nextType);
+    if (nextType === "MEAL_VOUCHER") {
+      setDueDay("1");
+    } else if (nextType === "CREDIT_CARD") {
+      setClosingDay("10");
+      setDueDay("17");
+    }
   };
 
   const handleCreate = async (e: React.FormEvent) => {
@@ -86,26 +117,52 @@ export function AccountsPage({ accounts, privacyMode, onRefresh }: AccountsPageP
     if (!name.trim()) return;
     setCreating(true);
     try {
+      const reloadCents = parseCurrencyToCents(reloadAmountInput || "0");
       await api.accounts.create({
         name: name.trim(),
         type,
         initialBalanceCents: parseCurrencyToCents(initialInput || "0"),
-        color: type === "CREDIT_CARD" ? "#8b5cf6" : "#10b981",
-        icon: type === "CREDIT_CARD" ? "credit-card" : "landmark",
+        color: defaultColorForType(type),
+        icon: defaultIconForType(type),
         ...(type === "CREDIT_CARD"
           ? {
               creditLimitCents: parseCurrencyToCents(creditLimitInput || "5000"),
               closingDay: Number(closingDay) || 10,
               dueDay: Number(dueDay) || 17,
             }
-          : {}),
+          : type === "MEAL_VOUCHER"
+            ? {
+                creditLimitCents: reloadCents > 0 ? reloadCents : null,
+                closingDay: null,
+                dueDay: Number(dueDay) || 1,
+              }
+            : {}),
       });
       setName("");
       setInitialInput("");
       setCreditLimitInput("");
+      setReloadAmountInput("");
       onRefresh();
     } finally {
       setCreating(false);
+    }
+  };
+
+  const handleQuickReload = async (acc: AccountDTO) => {
+    if (!acc.creditLimitCents || acc.creditLimitCents <= 0) return;
+    setReloadingId(acc.id);
+    try {
+      await api.transactions.create({
+        accountId: acc.id,
+        title: `Recarga ${acc.name}`,
+        type: "INCOME",
+        amountCents: acc.creditLimitCents,
+        date: new Date().toISOString().slice(0, 10),
+        status: "PAID",
+      });
+      onRefresh();
+    } finally {
+      setReloadingId(null);
     }
   };
 
@@ -121,17 +178,29 @@ export function AccountsPage({ accounts, privacyMode, onRefresh }: AccountsPageP
     setEditSaving(true);
     setEditError(null);
     try {
+      const editReloadOrLimit = parseCurrencyToCents(editCreditLimitInput || "0");
       await api.accounts.update(editingAccount.id, {
         name: trimmedName,
         type: editType,
         initialBalanceCents: parseCurrencyToCents(editInitialInput || "0"),
         color: editColor,
-        icon: editType === "CREDIT_CARD" ? "credit-card" : "landmark",
+        icon: defaultIconForType(editType),
         isArchived: editArchived,
         creditLimitCents:
-          editType === "CREDIT_CARD" ? parseCurrencyToCents(editCreditLimitInput || "0") : null,
+          editType === "CREDIT_CARD"
+            ? editReloadOrLimit
+            : editType === "MEAL_VOUCHER"
+              ? editReloadOrLimit > 0
+                ? editReloadOrLimit
+                : null
+              : null,
         closingDay: editType === "CREDIT_CARD" ? Number(editClosingDay) || 10 : null,
-        dueDay: editType === "CREDIT_CARD" ? Number(editDueDay) || 17 : null,
+        dueDay:
+          editType === "CREDIT_CARD"
+            ? Number(editDueDay) || 17
+            : editType === "MEAL_VOUCHER"
+              ? Number(editDueDay) || 1
+              : null,
       });
       setEditingAccount(null);
       onRefresh();
@@ -151,7 +220,9 @@ export function AccountsPage({ accounts, privacyMode, onRefresh }: AccountsPageP
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Contas</h1>
-        <p className="text-xs text-zinc-500">Bancos, carteiras e reservas com saldo calculado</p>
+        <p className="text-xs text-zinc-500">
+          Bancos, carteiras, cartões de crédito e vale alimentação com saldo calculado
+        </p>
       </div>
 
       <form
@@ -162,12 +233,13 @@ export function AccountsPage({ accounts, privacyMode, onRefresh }: AccountsPageP
           required
           value={name}
           onChange={(e) => setName(e.target.value)}
-          placeholder="Nome da conta (ex: Nubank)"
+          placeholder="Nome da conta (ex: Nubank, Alelo VA)"
           className="rounded-xl border border-zinc-300 bg-transparent px-3 py-2 text-sm outline-none focus:border-emerald-500 dark:border-zinc-700"
         />
         <select
+          aria-label="Tipo da nova conta"
           value={type}
-          onChange={(e) => setType(e.target.value as AccountType)}
+          onChange={(e) => handleTypeChange(e.target.value as AccountType)}
           className="rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm outline-none dark:border-zinc-700 dark:bg-zinc-900"
         >
           {ACCOUNT_TYPES.map((t) => (
@@ -209,6 +281,26 @@ export function AccountsPage({ accounts, privacyMode, onRefresh }: AccountsPageP
             />
           </>
         )}
+        {type === "MEAL_VOUCHER" && (
+          <>
+            <input
+              inputMode="decimal"
+              value={reloadAmountInput}
+              onChange={(e) => setReloadAmountInput(e.target.value)}
+              placeholder="Recarga mensal (R$)"
+              className="rounded-xl border border-zinc-300 bg-transparent px-3 py-2 text-sm tabular-nums outline-none focus:border-emerald-500 dark:border-zinc-700"
+            />
+            <input
+              type="number"
+              min={1}
+              max={31}
+              value={dueDay}
+              onChange={(e) => setDueDay(e.target.value)}
+              placeholder="Dia da recarga"
+              className="rounded-xl border border-zinc-300 bg-transparent px-3 py-2 text-sm outline-none dark:border-zinc-700"
+            />
+          </>
+        )}
         <button
           type="submit"
           disabled={creating}
@@ -233,7 +325,7 @@ export function AccountsPage({ accounts, privacyMode, onRefresh }: AccountsPageP
                   className="flex h-9 w-9 items-center justify-center rounded-xl text-white"
                   style={{ backgroundColor: acc.color }}
                 >
-                  <Wallet className="h-4 w-4" />
+                  <AccountIcon type={acc.type} />
                 </div>
                 <div>
                   <div className="flex items-center gap-1.5">
@@ -279,6 +371,30 @@ export function AccountsPage({ accounts, privacyMode, onRefresh }: AccountsPageP
                 <span>
                   · Fecha dia {acc.closingDay ?? 10} / Vence dia {acc.dueDay ?? 17}
                 </span>
+              </div>
+            )}
+
+            {acc.type === "MEAL_VOUCHER" && (
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-[11px] text-zinc-500">
+                <div>
+                  {acc.creditLimitCents != null && acc.creditLimitCents > 0 && (
+                    <span>
+                      Recarga:{" "}
+                      <MoneyText cents={acc.creditLimitCents} privacyMode={privacyMode} />
+                    </span>
+                  )}
+                  {acc.dueDay != null && <span> · Todo dia {acc.dueDay}</span>}
+                </div>
+                {acc.creditLimitCents != null && acc.creditLimitCents > 0 && (
+                  <button
+                    type="button"
+                    disabled={reloadingId === acc.id}
+                    onClick={() => void handleQuickReload(acc)}
+                    className="rounded-lg bg-amber-500/15 px-2.5 py-1 text-[11px] font-semibold text-amber-400 hover:bg-amber-500/25 disabled:opacity-50"
+                  >
+                    {reloadingId === acc.id ? "Lançando..." : "+ Lançar Recarga"}
+                  </button>
+                )}
               </div>
             )}
 
@@ -417,6 +533,43 @@ export function AccountsPage({ accounts, privacyMode, onRefresh }: AccountsPageP
                     </label>
                     <input
                       id="edit-card-due"
+                      type="number"
+                      min={1}
+                      max={31}
+                      value={editDueDay}
+                      onChange={(e) => setEditDueDay(e.target.value)}
+                      className="w-full rounded-xl border border-zinc-300 bg-transparent px-3 py-2 text-sm outline-none focus:border-emerald-500 dark:border-zinc-700"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {editType === "MEAL_VOUCHER" && (
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label
+                      htmlFor="edit-voucher-reload"
+                      className="mb-1 block text-xs font-medium text-zinc-400"
+                    >
+                      Recarga Mensal (R$)
+                    </label>
+                    <input
+                      id="edit-voucher-reload"
+                      inputMode="decimal"
+                      value={editCreditLimitInput}
+                      onChange={(e) => setEditCreditLimitInput(e.target.value)}
+                      className="w-full rounded-xl border border-zinc-300 bg-transparent px-3 py-2 text-sm tabular-nums outline-none focus:border-emerald-500 dark:border-zinc-700"
+                    />
+                  </div>
+                  <div>
+                    <label
+                      htmlFor="edit-voucher-day"
+                      className="mb-1 block text-xs font-medium text-zinc-400"
+                    >
+                      Dia da Recarga
+                    </label>
+                    <input
+                      id="edit-voucher-day"
                       type="number"
                       min={1}
                       max={31}
